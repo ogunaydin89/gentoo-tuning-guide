@@ -1,0 +1,15 @@
+# Secrets & Credentials
+*.env
+*.key
+*.pem
+*.token
+*secret*
+*credential*
+.git-credentials
+
+# OS & Editor artifacts
+.DS_Store
+*~
+*.swp
+*.bak
+.directory
