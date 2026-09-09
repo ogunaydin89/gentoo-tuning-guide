@@ -668,3 +668,9 @@ export PYTORCH_HIP_ALLOC_CONF="garbage_collection_threshold:0.6,max_split_size_m
   * Ensure `sys-kernel/gentoo-kernel` is registered in `@world` (`emerge --select sys-kernel/gentoo-kernel`). This ensures the system maintenance alias `up` (`emerge -vuDN ... @world && emerge --depclean`) automatically compiles and installs newly released kernels, and prevents `emerge --depclean` from removing the kernel image, `dracut`, or `installkernel`.
   * Preserved silicon tuning snippets reside in `/etc/kernel/config.d/10-zen3-gaming.config` (`CONFIG_MZEN3=y`, `CONFIG_HZ_1000=y`, `CONFIG_PREEMPT=y`, `CONFIG_RCU_BOOST=y`, `CONFIG_LOCALVERSION="-5700v6650"`).
   * **Hardware Stripping via `USE="savedconfig"`**: `/etc/portage/package.use/00-kernel.conf` enables `sys-kernel/gentoo-kernel -debug savedconfig`, backed by `/etc/portage/savedconfig/sys-kernel/gentoo-kernel`. This drops ~4,700 unused enterprise driver modules down to ~100 active modules, keeping compile passes at ~2 minutes within `alias up`.
+
+---
+
+## 16. 🔄 Codeberg Master Guide Synchronization Directive
+
+* **Continuous Repository Synchronization:** Whenever system tuning directives, kernel policies, or hardware rules are updated in the agent's brain or system rules, ALWAYS update `/home/helin/gentoo-tuning-guide/README.md`, commit, and push directly to Codeberg (`https://codeberg.org/helinesca/gentoo-tuning-guide`).
