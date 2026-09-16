@@ -21,7 +21,7 @@ git clone https://codeberg.org/helinesca/gentoo-tuning-guide.git
 >    * Generate the exact `CPU_FLAGS_X86` using `app-portage/cpuid2cpuflags`.
 >    * Set optimal `VIDEO_CARDS` (`radeonsi amdgpu` for modern AMD, `nvidia` for NVIDIA, `iris intel` for Intel).
 >    * Configure `RUSTFLAGS="-C target-cpu=native -C link-arg=-fuse-ld=mold"` and native GCC/Clang optimization flags (`-march=native -fuse-ld=mold`).
->    * Adopt the **Stable Base (`amd64`) + Targeted Bleeding-Edge (`~amd64`)** architecture: keep `ACCEPT_KEYWORDS="amd64"` in `make.conf` and selectively keyword hardware/desktop/media packages in `/etc/portage/package.accept_keywords/`.
+>    * Adopt the **Pure Testing (`~amd64`) Architecture**: set `ACCEPT_KEYWORDS="~amd64"` in `make.conf` for full system synchronization, zero keyword fragmentation, and seamless zero-touch updates.
 > 3. **Tailor Kernel Architecture:**
 >    * Adapt `/etc/kernel/config.d/10-gaming.config` to target the exact CPU family (`CONFIG_MZEN3=y`, `CONFIG_MZEN4=y`, `CONFIG_MZEN5=y`, `CONFIG_MCORE2=y`, etc.).
 >    * Set `CONFIG_LOCALVERSION` following the `CPUvGPU` naming rule (e.g. `CONFIG_LOCALVERSION="-5800x3dv9070xt"`).
@@ -423,8 +423,8 @@ MAKEOPTS="-j16 -l14"
 NINJAOPTS="-j16"
 EMERGE_DEFAULT_OPTS="--jobs=16 --load-average=14 --getbinpkg=n --autounmask-write=y --autounmask-continue=y"
 
-# Base keyword: Stable amd64 for rock-solid system plumbing & language runtimes
-ACCEPT_KEYWORDS="amd64"
+# Base keyword: Pure upstream/testing (~amd64) for full system synchronization
+ACCEPT_KEYWORDS="~amd64"
 ACCEPT_LICENSE="*"
 
 # Target architecture & hardware
@@ -445,110 +445,22 @@ PORTAGE_COMPRESS="lz4"
 PORTAGE_COMPRESS_FLAGS="-T16"
 ```
 
-### 🏛️ The "Stable Base + Targeted Bleeding-Edge" Architecture & Hybrid Starter Pack
+### 🏛️ The Pure Testing (`~amd64`) Architecture (Zero Fragmentation & Full Synchronization)
 
-Rather than tracking testing globally (`ACCEPT_KEYWORDS="~amd64"`)—which turns the entire OS into a QA testing ground for mundane language runtime regressions (Perl/Go/Python) and library churn with zero performance gain—the optimal power-user architecture runs a **Rock-Solid Stable Base (`amd64`)** while selectively keyword-accepting **`~amd64`** for the specific hardware, graphics, desktop, and media components that genuinely benefit from cutting-edge upstream code.
+While a hybrid architecture (stable base + cherry-picked `~amd64` keywords) attempts to insulate language runtimes from upstream churn, on enthusiast multi-threaded workstations it inevitably introduces the **"Hybrid Dependency Trap"**:
+* **Subslot & Virtual Skew**: As upstream Gentoo stabilizes core virtuals (e.g. `virtual/perl-File-Spec-3.950.0`) that strictly require testing runtime versions (`dev-lang/perl-5.44*`), artificial version locks in `package.mask` collide with routine updates.
+* **Portage Backtracking Tax**: Resolving the artificial boundary between stable plumbing and bleeding-edge desktops forces Portage to spend 40–60+ seconds calculating complex backtracking passes on every update.
+* **Keyword File Clutter**: Maintaining 7–9 fragmented files in `/etc/portage/package.accept_keywords/` requires constant manual intervention.
 
-> [!IMPORTANT]
-> **THE "DOMINO PRINCIPLE" FOR HYBRID FRESH INSTALLS & FLEET PCS:**
-> Whenever you pull a major subsystem from the testing branch (`~amd64`) onto a stable base (`amd64`), its **private build tools, code generators, and headers also live in testing**. For example, KDE Plasma 6 strictly requires `wayland-scanner ~amd64`, Vulkan tools strictly require `vulkan-headers ~amd64`, Neovim strictly requires `dev-lua/luv ~amd64`, and ROCm OpenCL strictly requires `rocr-runtime ~amd64` and `llvm-core/* ~amd64`.
-> 
-> When setting up a **fresh Gentoo install** on the Battleship rig or any other fleet machine, **copy these 7 modular `.conf` files directly into `/etc/portage/package.accept_keywords/` right after unpacking stage3**. This allows `emerge @world` to compile the entire OS, KDE 6, Mesa, and ROCm in a **single flawless pass without a single masked package stop**.
+#### The Zero-Touch Testing Standard:
+By running **`ACCEPT_KEYWORDS="~amd64"` globally in `/etc/portage/make.conf`**:
+1. **Total System Synchronization**: Compilers, core libraries, virtuals, and desktop environments (KDE Plasma 6, Mesa, Wayland, ROCm) advance together in complete lockstep.
+2. **Zero Keyword Maintenance**: `/etc/portage/package.accept_keywords/` remains completely clean—no fragmented `.conf` files to babysit or resolve.
+3. **Effortless Multi-Threaded Throughput**: Backed by a 16-thread Zen CPU, native mold linker (`-fuse-ld=mold`), and dual-tier LZ4 ZRAM tmpfs (`/var/tmp/portage`), full testing upgrades compile seamlessly in the background with zero developer friction.
 
-Modular configurations in `/etc/portage/package.accept_keywords/`:
-
-#### 1. GPU Stack & Hardware Firmware (`/etc/portage/package.accept_keywords/01-gpu.conf`):
-```text
-media-libs/mesa ~amd64
-x11-libs/libdrm ~amd64
-sys-kernel/linux-firmware ~amd64
-dev-util/vulkan-tools ~amd64
-media-video/libva-utils ~amd64
-sys-process/nvtop ~amd64
-dev-util/vulkan-headers ~amd64
-dev-util/glslang ~amd64
-dev-util/spirv-tools ~amd64
-dev-util/spirv-headers ~amd64
-dev-util/vulkan-* ~amd64
-media-libs/vulkan-* ~amd64
-```
-*Directly delivers the newest RADV Vulkan drivers, ACO shader compiler improvements, Navi 23 SMU/VCN firmware blobs, and Vulkan build toolchains.*
-
-#### 2. KDE Plasma 6, Wayland & Qt6 (`/etc/portage/package.accept_keywords/02-desktop.conf`):
-```text
-kde-plasma/* ~amd64
-kde-frameworks/* ~amd64
-kde-apps/* ~amd64
-dev-qt/* ~amd64
-x11-misc/sddm ~amd64
-dev-libs/wayland ~amd64
-dev-libs/wayland-protocols ~amd64
-gui-libs/* ~amd64
-media-libs/kquickimageeditor ~amd64
-gui-apps/* ~amd64
-dev-util/wayland-scanner ~amd64
-media-gfx/kio-ps-thumbnailer ~amd64
-```
-*Ensures rapid upstream display server protocols (explicit sync, HDR, tearing control, fractional scaling), full Plasma 6 feature parity, and required Wayland code generators.*
-
-#### 3. Pro-Audio & Video Codecs (`/etc/portage/package.accept_keywords/03-audio-media.conf`):
-```text
-media-video/pipewire ~amd64
-media-video/wireplumber ~amd64
-media-video/ffmpeg ~amd64
-media-video/ffmpegthumbnailer ~amd64
-media-video/mpv ~amd64
-media-libs/dav1d ~amd64
-media-libs/svt-av1 ~amd64
-media-libs/libsdl3 ~amd64
-net-misc/yt-dlp ~amd64
-```
-*Guarantees lowest PipeWire audio latency buffer scheduling and hardware VAAPI AV1/HEVC encoding optimizations for production pipelines.*
-
-#### 4. Modern CLI Daily Drivers & Linker (`/etc/portage/package.accept_keywords/04-cli-tools.conf`):
-```text
-app-shells/fzf ~amd64
-app-shells/zoxide ~amd64
-sys-apps/bat ~amd64
-sys-apps/eza ~amd64
-sys-apps/fd ~amd64
-sys-apps/ripgrep ~amd64
-sys-fs/duf ~amd64
-app-misc/fastfetch ~amd64
-app-editors/neovim ~amd64
-sys-process/btop ~amd64
-sys-devel/mold ~amd64
-dev-lua/* ~amd64
-```
-
-#### 5. OpenCL, ROCm & Compute (`/etc/portage/package.accept_keywords/05-opencl-rocm.conf`):
-```text
-dev-libs/rocm-opencl-runtime ~amd64
-dev-libs/opencl-icd-loader ~amd64
-virtual/opencl ~amd64
-llvm-runtimes/libclc ~amd64
-dev-util/spirv-llvm-translator ~amd64
-llvm-core/* ~amd64
-llvm-runtimes/* ~amd64
-dev-libs/rocr-* ~amd64
-dev-libs/rocm-* ~amd64
-dev-util/hip* ~amd64
-dev-build/rocm-cmake ~amd64
-dev-libs/roct-* ~amd64
-dev-util/opencl-* ~amd64
-```
-
-#### 6. Fonts & Typography (`/etc/portage/package.accept_keywords/06-fonts.conf`):
-```text
-media-fonts/* ~amd64
-```
-
-#### 7. Core Python Interpreters (`/etc/portage/package.accept_keywords/07-python.conf`):
-```text
-dev-lang/python ~amd64
-dev-lang/python-exec ~amd64
-dev-lang/python-exec-conf ~amd64
-```
+> [!TIP]
+> **Zero-Maintenance Upgrades:**
+> With global `~amd64`, your maintenance alias `up` (`emerge -vuDN --with-bdeps=y --keep-going @world && emerge --depclean`) runs completely unattended with zero dependency blockers or keyword collisions.
 
 ### ⚡ High-Capacity Tmpfs RAMDisk for Lightning-Fast Builds (`/etc/fstab`):
 Mounting `/var/tmp/portage` in RAM eliminates NVMe write cycles and dramatically accelerates parallel C++ compilation by operating directly in memory. Size according to available RAM:
