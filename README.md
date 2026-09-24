@@ -34,7 +34,7 @@ git clone https://codeberg.org/helinesca/gentoo-tuning-guide.git
 >    * When tuning a GPU, the AI assistant **MUST perform live web research** to identify community-proven, rock-solid daily-driver voltage offsets and maximum boost frequencies for that exact GPU die before drafting any `/etc/local.d/` startup script.
 > 6. **Dynamic RAM Capacity & ZRAM / Tmpfs Scaling:**
 >    * Query host RAM using `free -h` or `/proc/meminfo` (`awk '/MemTotal/{print int($2/1024/1024)}' /proc/meminfo`).
->    * **16 GB RAM Machines (Workhorse / Office)**: Set ZRAM to 100% of RAM (`16G`) with LZ4, backed by a secondary NVMe partition swap. Size `/var/tmp/portage` to `24G`.
+>    * **16 GB RAM Machines (Workhorse)**: Set ZRAM to 100% of RAM (`16G`) with LZ4, backed by a secondary NVMe partition swap. Size `/var/tmp/portage` to `24G`.
 >    * **32 GB+ RAM Machines (Battleship Rig)**: Set ZRAM dynamically to 50%–100% of physical RAM (`16G`–`32G`). With LZ4 compression (~2.5:1 ratio), a 32 GB ZRAM pool allows compiling massive monolith packages (`qtwebengine`, `llvm`, `firefox`) entirely inside compressed RAM/tmpfs without touching the SSD or causing OOM killer invocations. Size `/var/tmp/portage` to `28G`–`32G`.
 > 7. **Strict Gentoo Source Policy:**
 >    * Always compile packages and kernels from source. Never use binary packages (`--getbinpkg=n`) unless explicitly requested.
@@ -44,7 +44,7 @@ git clone https://codeberg.org/helinesca/gentoo-tuning-guide.git
 ## 📋 Hardware Fleet & Reference Specs
 * **Current Rig (Workhorse / Frankenstein):** AMD Ryzen 7 5700X (8c/16t, Zen 3 Vermeer), AMD Radeon RX 6650 XT (8GB VRAM), 16 GB DDR4 RAM.
 * **Battleship Rig (Main Gaming):** AMD Ryzen 7 5800X3D (8c/16t, 96MB 3D V-Cache), AMD Radeon RX 9070 XT (RDNA 4), 32 GB RAM.
-* **School Office PC:** AMD Ryzen 5 5600G (6c/12t, Zen 3 APU), NVIDIA GeForce GTX 1650 (4GB VRAM), 16 GB RAM.
+* **School Office PC:** AMD Ryzen 5 5600G (6c/12t, Zen 3 APU), NVIDIA GeForce GTX 1650 (4GB VRAM), 16 GB RAM. Runs **Windows 11**, not Gentoo; the Gentoo, kernel and OpenRC sections of this guide do not apply to it.
 * **Init System:** OpenRC (Gentoo 23.0 profile)
 * **Desktop Environment:** KDE Plasma 6 + Wayland + PipeWire
 
@@ -58,7 +58,6 @@ Compiling your own custom kernel from source extracts maximum responsiveness, cu
 Every custom kernel compiled with this guide uses the **`CPUvGPU`** naming standard set via `CONFIG_LOCALVERSION`:
 * **This Machine (5700X + RX 6650 XT):** `CONFIG_LOCALVERSION="-5700v6650"` $\rightarrow$ `uname -r` outputs `7.1.9-5700v6650`
 * **Battleship (5800X3D + RX 9070 XT):** `CONFIG_LOCALVERSION="-5800x3dv9070xt"` $\rightarrow$ `uname -r` outputs `7.1.9-5800x3dv9070xt`
-* **Office PC (5600G + GTX 1650):** `CONFIG_LOCALVERSION="-5600gv1650"` $\rightarrow$ `uname -r` outputs `7.1.9-5600gv1650`
 
 ### ⚙️ Kernel Configuration Snippet (`/etc/kernel/config.d/10-zen3-gaming.config`):
 Create `/etc/kernel/config.d/10-zen3-gaming.config`:
@@ -279,7 +278,7 @@ sudo sysctl --system
 Prevents Out-Of-Memory (OOM) freezing during heavy 16-thread source builds while keeping zero swap thrashing during gaming.
 
 ### 📐 Fleet Memory Sizing & Tiering:
-* **16 GB RAM Fleet (Workhorse / School Office PC):**
+* **16 GB RAM Fleet (Workhorse):**
   * **Tier 1 (Priority 32767):** 16 GB Compressed RAM Swap via ZRAM (`lz4` algorithm).
   * **Tier 2 (Priority 1):** 16 GB NVMe SSD partition swap as a safety buffer.
   * *Prevents OOM lockups during multi-threaded builds while leaving ample RAM for desktop responsiveness.*
