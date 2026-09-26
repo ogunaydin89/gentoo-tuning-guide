@@ -537,6 +537,21 @@ Allows instantaneous in-place deletion of sensitive commands, typos, or obsolete
    zle -N fzf-history-widget _fzf_history_wrapper
    ```
 
+### 🛡️ Safe Configuration Merging (`etc-update`)
+
+After running `up`, Portage may warn: `* IMPORTANT: X config files in '/etc' need updating.`
+**Strict Rule: Never blindly auto-replace.** Run `sudo etc-update` and evaluate the diffs using this logic:
+
+1. **REJECT (Press `2` - Delete update, keep your custom version):**
+   * If upstream tries to revert your hardware/boot tuning (e.g., reverting `rc_parallel="YES"`).
+   * If upstream attempts to strip out your custom OpenRC daemon supervision loops (e.g., `power-profiles-daemon`).
+   * If the diff wipes out custom configurations like your `locale.gen` or UFW firewall rules.
+2. **ACCEPT (Press `1` - Replace with new upstream default):**
+   * If it is a brand new configuration file you haven't touched (e.g., `lm_sensors.conf`).
+   * If the diff only contains harmless upstream comment updates or new default variables.
+3. **AUTO-MERGE TRIVIAL (Press `-5`):**
+   * Safely and automatically merges files where you have made zero manual modifications.
+
 ---
 
 ## 13. 🤖 AI (ROCm / PyTorch) Acceleration Reference
