@@ -480,14 +480,14 @@ Mount immediately: `sudo mount /var/tmp/portage`
 Add this alias to `~/.zshrc` (or `~/.bashrc`) for completely unattended multi-hour updates:
 
 ```bash
-alias up='sudo zsh -c "emerge -vuDN --with-bdeps=y --keep-going @world && emerge --depclean"'
+alias up='sudo zsh -c "eix-sync && emerge -vuDN --with-bdeps=y --keep-going @world && emerge --depclean"'
 ```
 
 #### 🛡️ Architecture & Technical Breakdown:
 1. **`sudo zsh -c "..."` (Sudo Timeout Protection)**:
    * Normally, `sudo` credential caching expires after 15 minutes. Wrapping the pipeline in a single elevated subshell guarantees that multi-hour compilations will never stall waiting for a password at the `depclean` stage.
-2. **Decoupled Sync (Gentoo Mirror Netiquette)**:
-   * Tree syncing (`emerge --sync` / `eix-sync`) is kept separate (e.g., via `em-sync`) to avoid unnecessarily hammering Gentoo rsync mirrors on routine world rebuilds or repeated update runs.
+2. **Git-Native Auto-Sync (`eix-sync`)**:
+   * Because Portage is configured to sync via Git (`sync-type = git`), `eix-sync` executes in ~2-4 seconds with zero disk I/O penalties or server rate limits. This allows us to seamlessly integrate the sync directly into the upgrade pipeline.
 3. **`emerge -vuDN --keep-going @world`**:
    * **`-v` (`--verbose`)**: Outputs full build telemetry, package versions, and USE flags.
    * **`-u` (`--update`)**: Upgrades packages to their newest available upstream releases.
