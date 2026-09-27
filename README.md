@@ -503,6 +503,8 @@ alias up='sudo zsh -c "eix-sync && emerge -vuDN --with-bdeps=y --keep-going @wor
 
 ### 📋 Manual Maintenance Reference Table
 
+**Required Packages:** `app-portage/gentoolkit`
+
 | Task | Command |
 | :--- | :--- |
 | **All-in-One Unattended Update** | `up` |
@@ -518,6 +520,8 @@ alias up='sudo zsh -c "eix-sync && emerge -vuDN --with-bdeps=y --keep-going @wor
 
 ### 🧹 Interactive FZF History Deletion Engine (`Ctrl-X`)
 
+**Required Packages:** `app-shells/fzf`
+
 Allows instantaneous in-place deletion of sensitive commands, typos, or obsolete scripts directly from inside FZF's `Ctrl+R` fuzzy search:
 
 1. **Deletion Engine (`~/.local/bin/fzf-history-delete`)**:
@@ -527,6 +531,10 @@ Allows instantaneous in-place deletion of sensitive commands, typos, or obsolete
    * Re-evaluates `~/.zsh_history` in ~7ms and feeds the null-delimited stream directly back to FZF's `--read0` buffer for instant UI refresh.
 3. **Zsh Integration (`~/.zshrc`)**:
    ```zsh
+   # Must source base bindings FIRST!
+   [ -f /usr/share/fzf/key-bindings.zsh ] && source /usr/share/fzf/key-bindings.zsh
+   [ -f /usr/share/fzf/key-bindings.bash ] && source /usr/share/fzf/key-bindings.bash
+
    export FZF_CTRL_R_OPTS="--bind 'ctrl-x:execute-silent(fzf-history-delete {+f})+reload(fzf-history-reload)' --header 'Ctrl-X: Delete entry | Ctrl-R: Toggle sort'"
    _fzf_history_wrapper() {
        fzf-history-widget "$@"
@@ -559,13 +567,13 @@ After running `up`, Portage may warn: `* IMPORTANT: X config files in '/etc' nee
 ### ROCm / ComfyUI / PyTorch SDMA Page Fault Fix on RDNA GPUs:
 On AMD Radeon consumer GPUs (Navi 23 / 6650 XT / 7000 / 9000 series), rapid weight offloading between RAM and VRAM during heavy neural model runs can cause hardware SDMA page faults (`Page not present / 0x7fa...`).
 
-Add to your AI runner scripts (e.g. `run_gpu.sh`):
+**⚠️ WARNING FOR GAMING RIGS:** Do *not* export these globally in your `~/.bashrc`! Disabling SDMA globally can cause severe performance degradation and visual glitches in standard desktop games and compositors. Add strictly to your local AI runner scripts (e.g. `run_gpu.sh`):
 ```bash
 # Force ROCm compute shader memory blits (ELIMINATES SDMA page fault crashes):
 export HSA_ENABLE_SDMA=0
 
 # Hardware GFX override (10.3.0 for RDNA2 / RX 6650 XT, 11.0.0 for RDNA3, 12.0.0 for RDNA4):
-export HSA_OVERRIDE_GFX_VERSION=10.3.0
+export HSA_OVERRIDE_GFX_VERSION=10.3.0  # (Use 12.0.0 for Navi 48 / 9070 XT)
 
 # PyTorch low-fragmentation memory allocator:
 export PYTORCH_HIP_ALLOC_CONF="garbage_collection_threshold:0.6,max_split_size_mb:64"
