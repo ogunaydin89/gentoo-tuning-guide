@@ -23,7 +23,7 @@ git clone https://codeberg.org/helinesca/gentoo-tuning-guide.git
 >    * Configure `RUSTFLAGS="-C target-cpu=native -C link-arg=-fuse-ld=mold"` and native GCC/Clang optimization flags (`-march=native -fuse-ld=mold`).
 >    * Adopt the **Pure Testing (`~amd64`) Architecture**: set `ACCEPT_KEYWORDS="~amd64"` in `make.conf` for full system synchronization, zero keyword fragmentation, and seamless zero-touch updates.
 > 3. **Tailor Kernel Architecture:**
->    * Adapt `/etc/kernel/config.d/10-gaming.config` to target the exact CPU family (`CONFIG_MZEN3=y`, `CONFIG_MZEN4=y`, `CONFIG_MZEN5=y`, `CONFIG_MCORE2=y`, etc.).
+>    * Target the build machine's own CPU in `/etc/kernel/config.d/10-zen3-gaming.config` with `CONFIG_X86_NATIVE_CPU=y` (`-march=native`). **Do not use `CONFIG_MZEN3`/`MZEN4`/`MZEN5`/`MCORE2`/`GENERIC_CPU`:** mainline removed these per-CPU options (6.18 has none of them), and Kconfig silently ignores them, leaving a generic x86-64 build.
 >    * Set `CONFIG_LOCALVERSION` following the `CPUvGPU` naming rule (e.g. `CONFIG_LOCALVERSION="-5800x3dv9070xt"`).
 > 4. **Adaptive GPU Latency & High-Refresh Display Rules (144Hz / 240Hz / 360Hz+):**
 >    * Frame deadlines scale inversely with refresh rate: **144Hz = 6.94ms**, **240Hz = 4.16ms**, **360Hz = 2.77ms**.
@@ -67,9 +67,9 @@ Create `/etc/kernel/config.d/10-zen3-gaming.config`:
 # AMD Zen 3 / Zen 4 Ultra-Tuned Gaming Kernel Configuration
 # ==============================================================================
 
-# 1. Native CPU Target (Optimizes all kernel binaries for Zen 3 & 3D V-Cache)
-CONFIG_MZEN3=y
-# CONFIG_GENERIC_CPU is not set
+# 1. Native CPU Target (-march=native for the machine that builds the kernel)
+#    Mainline removed CONFIG_MZEN3 & co. (absent in 6.18); they are silently ignored.
+CONFIG_X86_NATIVE_CPU=y
 
 # 2. 1000Hz Timer Tick Rate (1.0ms scheduler resolution — cuts frame pacing jitter)
 CONFIG_HZ_1000=y
@@ -83,6 +83,8 @@ CONFIG_PREEMPT=y
 # CONFIG_PREEMPT_LAZY is not set
 
 # 4. Realtime Priority Boosting & High-Resolution Timers
+#    RCU_BOOST is only offered with RCU_EXPERT=y; without it both lines are dropped.
+CONFIG_RCU_EXPERT=y
 CONFIG_RCU_BOOST=y
 CONFIG_RCU_BOOST_DELAY=500
 CONFIG_SCHED_SMT=y
@@ -127,7 +129,12 @@ cat /boot/config-$(uname -r) | grep "CONFIG_HZ_1000=y"
 
 # Verify preemption model:
 uname -a                                         # Displays PREEMPT
+
+# Verify native CPU target and RCU boost really made it into the kernel:
+zgrep -E 'CONFIG_X86_NATIVE_CPU=|CONFIG_RCU_BOOST=' /proc/config.gz
 ```
+
+> ⚠️ Kconfig silently drops options that no longer exist or whose dependencies are not met. After every new kernel, compare each line of `/etc/kernel/config.d/*.config` with `/proc/config.gz`.
 
 ---
 
@@ -706,7 +713,7 @@ export PYTORCH_HIP_ALLOC_CONF="garbage_collection_threshold:0.6,max_split_size_m
   ```
 * **Distribution Kernel & `@world` Persistence:**
   * Ensure `sys-kernel/gentoo-kernel` is registered in `@world` (`emerge --select sys-kernel/gentoo-kernel`). This ensures the system maintenance alias `up` (`emerge -vuDN ... @world && emerge --depclean`) automatically compiles and installs newly released kernels, and prevents `emerge --depclean` from removing the kernel image, `dracut`, or `installkernel`.
-  * Preserved silicon tuning snippets reside in `/etc/kernel/config.d/10-zen3-gaming.config` (`CONFIG_MZEN3=y`, `CONFIG_HZ_1000=y`, `CONFIG_PREEMPT=y`, `CONFIG_RCU_BOOST=y`, `CONFIG_LOCALVERSION="-5700v6650"`).
+  * Preserved silicon tuning snippets reside in `/etc/kernel/config.d/10-zen3-gaming.config` (`CONFIG_X86_NATIVE_CPU=y`, `CONFIG_HZ_1000=y`, `CONFIG_PREEMPT=y`, `CONFIG_RCU_EXPERT=y` + `CONFIG_RCU_BOOST=y`, `CONFIG_LOCALVERSION="-5700v6650"`).
   * **Hardware Stripping via `USE="savedconfig"`**: `/etc/portage/package.use/00-kernel.conf` enables `sys-kernel/gentoo-kernel -debug savedconfig`, backed by `/etc/portage/savedconfig/sys-kernel/gentoo-kernel`. This drops ~4,700 unused enterprise driver modules down to ~100 active modules, keeping compile passes at ~2 minutes within `alias up`.
 
 ---
@@ -882,6 +889,18 @@ Every package on the binhost is signed; new `emerge`/`quickpkg` builds are signe
 * Frankenstein synced to **2026-09-27 19:31:02 UTC** (same tree as the Battleship) and updated: the only new package was **`sys-devel/gcc-16.2.1_p20260926`**, now on the binhost, **signed**, in the index (1,268 packages) and served over the LAN (HTTP 200, 207 MB).
 * Nothing else is pending on Frankenstein for this tree (`emerge -pvuDN --with-bdeps=y @world` → 0 packages).
 * **Battleship:** re-run the dry run (gcc should now show as `[binary]`), then start `up` with the user's approval. Do **not** sync again before it, or the trees drift apart.
+
+### ⚠️ Battleship: kernel config check found dead options (2026-09-28, from the Battleship)
+
+Every line of the Battleship's `/etc/kernel/config.d/*.config` was compared with the running 6.18.50 kernel (`/proc/config.gz`). Three options never reached the kernel:
+
+* **`CONFIG_MZEN3=y` does nothing.** Mainline removed the per-CPU options (`MZEN3`, `MZEN4`, `MCORE2`, `GENERIC_CPU`, …). The running kernel has none of them and `CONFIG_X86_NATIVE_CPU` is not set, so it is a **generic x86-64 build**. Replacement: `CONFIG_X86_NATIVE_CPU=y`. Section 1 and `etc/kernel/config.d/10-zen3-gaming.config` are updated.
+* **`CONFIG_RCU_BOOST=y` / `RCU_BOOST_DELAY` are dropped** because RCU boost is only offered with `CONFIG_RCU_EXPERT=y`, which was not set. Added `CONFIG_RCU_EXPERT=y` (only unlocks the options; other RCU defaults stay).
+* **`CONFIG_SENSORS_NCT6687` does not exist in mainline.** The NCT6687D Super I/O on the MSI MPG B550 GAMING PLUS is handled by the in-kernel **`nct6683`** driver (`CONFIG_SENSORS_NCT6683=m`). It is built but never loads by itself, so board fans and voltages were missing (only `nvme`, `k10temp`, `amdgpu` in hwmon). Fix: `CONFIG_SENSORS_NCT6683=m` in `20-desktop-essentials.config` and `nct6683` in `/etc/modules-load.d/sensors.conf`.
+
+Everything else (HZ 1000, full preemption, HRTICK, SMT/MC, THP madvise, all module options) matches.
+
+**Frankenstein:** its copy of `10-zen3-gaming.config` has the same `CONFIG_MZEN3=y` and no `RCU_EXPERT`, so its kernel is most likely generic too (not checked from here: run `zgrep -E 'X86_NATIVE_CPU|RCU_BOOST=' /proc/config.gz` on Frankenstein). Apply the same two changes there. (Kernels are not taken from the binhost, so `X86_NATIVE_CPU` is safe on both machines.)
 
 ### Keeping both machines in step
 Binary packages are used only when the version matches. Sync the Gentoo tree on both machines around the same time (`emaint sync -a`) and update Frankenstein first, so its packages are ready when the Battleship updates.
