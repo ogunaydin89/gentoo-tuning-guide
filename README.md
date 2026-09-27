@@ -682,5 +682,25 @@ Anything not installed on Frankenstein (Steam, Chrome), packages whose USE flags
 * `~/.zshrc`: `up` alias added (the default shell is zsh; the alias previously existed only in `.bashrc`).
 * ⚠️ **Pitfall:** Portage reads **every** file in `package.use/` etc., including backups like `foo.bak`. Never keep backups inside `/etc/portage`.
 
+### Frankenstein status report (2026-09-27, written by the Claude on Frankenstein)
+
+**Binhost state:** live on `http://192.168.1.9:8080`, 1,131 packages. Frankenstein synced to **2026-09-27 19:00 UTC** and updated (`platformdirs`, `ghostscript-gpl`, `libspectre`, `networkmanager`, all saved as binaries by `buildpkg`).
+
+**Has the Battleship used the binhost yet? No.** The lighttpd access log shows the Battleship (`192.168.1.249`) fetched only the package index (`/Packages`, `/Packages.gz`) at 21:04, during its dry run, and **0 packages**. The client side (steps 2–3 above: `binrepos.conf` with `verify-signature = false`, `--getbinpkg=y`) is still to be done on the Battleship.
+
+**How to check binhost use at any time** (on Frankenstein):
+```bash
+sudo awk '{print $1}' /var/log/lighttpd/access.log | sort | uniq -c           # requests per client
+sudo grep -c 'gpkg.tar' /var/log/lighttpd/access.log                            # packages downloaded
+```
+
+**Why 7 packages were "ignored due to changed dependencies"** (`coreutils`, `zsh`, `curl`, `libgcrypt`, `patchelf`, `xdg-utils`, `Socket6`): not newer versions. Their dependency metadata changed in the tree without a version bump, so the copies packed with `quickpkg` carry outdated metadata and Portage rejects them. A plain `emerge -uDN @world` on Frankenstein does not touch them (same version installed).
+
+**Proposals (not done yet, need the user's approval):**
+1. **Refresh stale binaries on Frankenstein:** `emerge -uDN --changed-deps=y --with-bdeps=y @world`, which rebuilds **136 packages** from source (nothing to download, ~1–2 h, run in the background). Afterwards the Battleship gets those as binaries too. Optional: without it the Battleship compiles them itself.
+2. **Update order from now on:** Frankenstein first (`emaint sync -a` → `emerge -uDN --with-bdeps=y @world`), then the Battleship. The Battleship's tree (2026-09-27 11:15 UTC) is now older than Frankenstein's; it should sync before its next update so the versions match.
+3. **32-bit Steam stack as binaries (optional):** the ~100 `abi_x86_32` packages (both LLVMs, Mesa, …) can only come from the binhost if Frankenstein builds them in a separate chroot that carries the Battleship's `package.use/steam`. Otherwise the Battleship compiles them once and then only on updates.
+4. **DHCP reservation:** reserve `192.168.1.9` for Frankenstein in the router so the address never changes.
+
 ### Keeping both machines in step
 Binary packages are used only when the version matches. Sync the Gentoo tree on both machines around the same time (`emaint sync -a`) and update Frankenstein first, so its packages are ready when the Battleship updates.
