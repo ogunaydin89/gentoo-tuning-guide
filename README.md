@@ -262,6 +262,57 @@ Requires `amdgpu.ppfeaturemask=0xffffffff` on the kernel command line (already i
 
 **No LACT on the Battleship.** An Ubuntu `.deb` copy of LACT had been dropped into `/usr/bin` without Portage. It never ran (missing `libadwaita-1.so.0` and `libdisplay-info.so.1`), and its OpenRC service `lactd` respawned every 2 s since boot. It was removed on 2026-09-27. The only ebuild (`sys-apps/lact` in GURU) is not an option: GURU is never used on this fleet, and it needs `libdisplay-info:0/3` anyway. The `/etc/local.d` script above covers everything that was needed.
 
+
+---
+
+### 🧠 Battleship CPU: Ryzen 7 5800X3D PBO, Curve Optimizer & CPPC
+
+The 5800X3D's multiplier is locked, so the only real tuning is **Curve Optimizer (CO)**: a per-core shift of the voltage/frequency curve, set in the BIOS under *PBO → Curve Optimizer*. It needs a newer BIOS (AGESA 1.2.0.8 or later). Negative counts mean less voltage at the same clock, so cooler cores and longer boost. **PBO** itself only sets the power and current limits (PPT/TDC/EDC).
+
+#### What can be read from Linux
+* **PBO limits and live telemetry: yes.** `app-admin/ryzen_smu` (kernel module, `USE=dist-kernel` so it rebuilds for every new kernel) plus `app-admin/ryzen_monitor`: `sudo ryzen_monitor`.
+* **Curve Optimizer counts: not reliably.** There is no documented read path. ZenStates-Core reads CO on Vermeer via RSMU command `0x7C` (`GetDldoPsmMargin`), but its own source marks the ID `// Not sure`, and neighbouring RSMU IDs **set** CO and PBO values. **Never send raw SMU commands on a guess.** Check CO in the BIOS instead.
+* **CPPC core ranking: yes**, from sysfs (below).
+
+#### Battleship values (read 2026-09-27, kernel 6.18.50-5800x3dv9070xt, SMU firmware 56.78.0)
+
+**PBO limits** (`ryzen_monitor`, *Electrical & Thermal Constraints*):
+
+| Limit | Value |
+|---|---|
+| PPT (package power) | 142 W |
+| TDC (sustained current) | 95 A |
+| EDC (peak current) | 130 A |
+| THM (temperature limit) | 90 °C |
+
+Under a 16-thread Portage compile: all cores at ~4440 MHz, ~96 W PPT (68 %), 60 A TDC, peak core voltage 1.239 V, **75–82 °C**. That is normal for a 5800X3D even with negative CO, because the V-Cache die on top of the cores traps heat. Memory: 1826 MHz FCLK = UCLK = MCLK, coupled 1:1 (DDR4-3650).
+
+**Curve Optimizer** (set in the BIOS by the user and confirmed in the BIOS save summary), matched against the CPPC ranking from `/sys/devices/system/cpu/cpu*/acpi_cppc/highest_perf` (also `cpufreq/amd_pstate_prefcore_ranking`):
+
+| Core | CPPC highest_perf | Rank | CO |
+|---|---|---|---|
+| 0 | 196 | 1 | -20 |
+| 1 | 196 | 1 | -20 |
+| 2 | 191 | 3 | -20 |
+| 5 | 186 | 4 | -25 |
+| 4 | 181 | 5 | -25 |
+| 3 | 176 | 6 | -25 |
+| 6 | 171 | 7 | -30 |
+| 7 | 166 | 8 | -30 |
+
+(CPUs 8–15 are the SMT siblings of cores 0–7 and share their values.) This is the recommended pattern: the **best-ranked cores get the mildest CO**, because they do the highest single-thread boosting and are the first to become unstable with large negative counts. The weakest cores tolerate the most.
+
+**CO stability:** negative-CO instability shows up at **light, single-core loads** (idle, browsing), not in all-core compiles. If random reboots or crashes happen at idle, back off cores 6 and 7 to -25 first.
+
+**amd_pstate / CPPC state:** `amd_pstate=active` (EPP mode), preferred-core enabled (`/sys/devices/system/cpu/amd_pstate/prefcore` = `enabled`), max frequency 4.55 GHz, nominal 3.4 GHz. Governor, EPP and power-profiles-daemon are all set to `performance`. The cores still reach deep sleep (C6 ~90 % at idle). `balanced` would lower idle power further at practically no gaming cost.
+
+Read everything again with:
+```bash
+sudo ryzen_monitor                                                  # PBO limits + live telemetry
+cat /sys/devices/system/cpu/amd_pstate/{status,prefcore}
+for c in /sys/devices/system/cpu/cpu[0-7]; do echo "${c##*/} $(cat $c/acpi_cppc/highest_perf)"; done
+```
+
 ---
 
 ## 3. 🌐 IPv6 Disabling & Streaming Timeout Fix
