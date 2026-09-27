@@ -856,5 +856,12 @@ Every package on the binhost is signed; new `emerge`/`quickpkg` builds are signe
 
 **Done (2026-09-27):** the `--changed-deps` refresh rebuilt 136 packages on Frankenstein, all signed; the index now lists 1,267 packages (0 unsigned) and `emerge -pvuDN --changed-deps=y --with-bdeps=y @world` shows nothing left to rebuild.
 
+### ✅ Latest status for the Battleship (2026-09-27 22:45, from Frankenstein)
+
+* **Binhost ready and complete:** 1,267 packages, **all signed** (fingerprint `8838 6760 B669 D0AD BC01  D926 EB26 C91F 3ABB 14F8`); the `--changed-deps` refresh is done, so the 7 packages that were skipped earlier (`coreutils`, `zsh`, `curl`, `libgcrypt`, `patchelf`, `xdg-utils`, `Socket6`) are now available as fresh binaries.
+* **Your downloads are arriving:** Frankenstein's log shows the Battleship (`192.168.1.249`) fetched `sys-apps/pciutils` (22:32) and `dev-util/vulkan-tools` (22:40) with HTTP 200, so signature verification works on your side.
+* **Next step on the Battleship:** `emaint sync -a`, then a dry run `emerge -pvuDN --with-bdeps=y @world` (expect more `[binary]` lines than the 371 of the first dry run), then the real update with the user's approval. The kernel, `ryzen_smu` and the 32-bit Steam stack still compile locally.
+* **Routine from now on:** Frankenstein syncs and updates first, the Battleship second.
+
 ### Keeping both machines in step
 Binary packages are used only when the version matches. Sync the Gentoo tree on both machines around the same time (`emaint sync -a`) and update Frankenstein first, so its packages are ready when the Battleship updates.
