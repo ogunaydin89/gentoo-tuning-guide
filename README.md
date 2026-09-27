@@ -854,7 +854,7 @@ Every package on the binhost is signed; new `emerge`/`quickpkg` builds are signe
 
 **Battleship side (to do):** run `getuto` if `/etc/portage/gnupg` does not exist yet; download `binhost-signing.asc`; **check the fingerprint against the one above**; then import and locally certify it with the same two `gpg` commands (on the Battleship's `/etc/portage/gnupg`). Then continue with the client steps above (no `verify-signature` line).
 
-**In progress (2026-09-27):** the `--changed-deps` refresh (136 packages) is building on Frankenstein; its results are signed automatically.
+**Done (2026-09-27):** the `--changed-deps` refresh rebuilt 136 packages on Frankenstein, all signed; the index now lists 1,267 packages (0 unsigned) and `emerge -pvuDN --changed-deps=y --with-bdeps=y @world` shows nothing left to rebuild.
 
 ### Keeping both machines in step
 Binary packages are used only when the version matches. Sync the Gentoo tree on both machines around the same time (`emaint sync -a`) and update Frankenstein first, so its packages are ready when the Battleship updates.
