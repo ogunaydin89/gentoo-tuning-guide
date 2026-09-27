@@ -649,9 +649,9 @@ Frankenstein compiles, the Battleship installs the finished packages. This works
    [frankenstein]
    priority = 10
    sync-uri = http://192.168.1.9:8080
-   verify-signature = false
    ```
-   ⚠️ **`verify-signature = false` is required.** Current Portage verifies binary package signatures by default (`verify-signature = true` in `/usr/share/portage/config/binrepos.conf`, see Gentoo news `2026-05-03-portage-binpkg-changes`). The home binhost does not sign, so without this line every binary from Frankenstein is rejected. If `binpkg-signing` is set up on Frankenstein later, remove this line and import the public key into `/etc/portage/gnupg` on the Battleship instead.
+   Signatures stay verified (the Portage default): Frankenstein signs every package, see *Binary package signing* below.
+   ⚠️ **Never set `verify-signature = false`.** It would let any device on the LAN that impersonates `192.168.1.9` serve arbitrary packages installed as root. Import and trust the binhost's public key instead (below).
 3. **`make.conf`:** in `EMERGE_DEFAULT_OPTS`, `--getbinpkg=n` → `--getbinpkg=y`; keep `--binpkg-respect-use=y`, and add
    `--usepkg-exclude="sys-kernel/gentoo-kernel virtual/dist-kernel app-admin/ryzen_smu"`.
    The kernel and out-of-tree kernel modules are built for Frankenstein's own kernel (`-5700v6650`, savedconfig) and must always be compiled on the Battleship itself.
@@ -722,6 +722,33 @@ sudo grep -c 'gpkg.tar' /var/log/lighttpd/access.log                            
 2. Update order Frankenstein → Battleship: **yes**. The Battleship will `emaint sync -a` (git) right before its dry run; this does not count against the once-a-day rsync rule.
 3. 32-bit Steam chroot: **later, optional.** The Battleship compiles its ~100 `abi_x86_32` packages (both LLVMs, Mesa) once; the chroot only pays off for future LLVM/Mesa updates.
 4. DHCP reservation for `192.168.1.9`: **yes**, the user sets it in the router.
+
+### Binary package signing (set up 2026-09-27 on Frankenstein)
+
+Every package on the binhost is signed; new `emerge`/`quickpkg` builds are signed automatically.
+
+| | |
+|---|---|
+| Key | `Frankenstein binhost <binhost@gentoo-ryzen.lan>`, ed25519, sign-only, no expiry |
+| **Fingerprint** | **`8838 6760 B669 D0AD BC01  D926 EB26 C91F 3ABB 14F8`** |
+| Public key | `http://192.168.1.9:8080/binhost-signing.asc` |
+| Private key | `/root/.gnupg` on Frankenstein only (no passphrase, so unattended builds can sign; never copied anywhere) |
+
+**Frankenstein side (done):**
+* `gpg --homedir /root/.gnupg --quick-generate-key "Frankenstein binhost <binhost@gentoo-ryzen.lan>" ed25519 sign never`
+* `make.conf`: `FEATURES="… buildpkg binpkg-signing"`, `BINPKG_GPG_SIGNING_KEY="0x88386760B669D0ADBC01D926EB26C91F3ABB14F8"`, `BINPKG_GPG_SIGNING_GPG_HOME="/root/.gnupg"`.
+* Existing packages signed with `gpkg-sign` (**one file per call**: `find /var/cache/binpkgs -name '*.gpkg.tar' -print0 | xargs -0 -n 1 -P 12 gpkg-sign --skip-signed`), 1,131 packages in 47 s.
+* ⚠️ **Pitfall:** Frankenstein's own Portage verifies signatures too. Until its keyring (`/etc/portage/gnupg`, managed by `getuto`) trusted the new key, `emaint binhost --fix` rejected every package and wrote an **empty index** (0 entries). Fix, then re-run `emaint binhost --fix` (index back to 1,131):
+  ```bash
+  gpg --homedir /etc/portage/gnupg --import /var/cache/binpkgs/binhost-signing.asc
+  gpg --homedir /etc/portage/gnupg --batch --yes --pinentry-mode loopback \
+      --passphrase-file /etc/portage/gnupg/pass --quick-lsign-key 88386760B669D0ADBC01D926EB26C91F3ABB14F8
+  ```
+* Verified like a client: a fresh keyring holding only the public key reports `Good signature` for a downloaded package.
+
+**Battleship side (to do):** run `getuto` if `/etc/portage/gnupg` does not exist yet; download `binhost-signing.asc`; **check the fingerprint against the one above**; then import and locally certify it with the same two `gpg` commands (on the Battleship's `/etc/portage/gnupg`). Then continue with the client steps above (no `verify-signature` line).
+
+**In progress (2026-09-27):** the `--changed-deps` refresh (136 packages) is building on Frankenstein; its results are signed automatically.
 
 ### Keeping both machines in step
 Binary packages are used only when the version matches. Sync the Gentoo tree on both machines around the same time (`emaint sync -a`) and update Frankenstein first, so its packages are ready when the Battleship updates.
