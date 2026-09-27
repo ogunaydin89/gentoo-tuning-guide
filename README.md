@@ -702,5 +702,26 @@ sudo grep -c 'gpkg.tar' /var/log/lighttpd/access.log                            
 3. **32-bit Steam stack as binaries (optional):** the ~100 `abi_x86_32` packages (both LLVMs, Mesa, …) can only come from the binhost if Frankenstein builds them in a separate chroot that carries the Battleship's `package.use/steam`. Otherwise the Battleship compiles them once and then only on updates.
 4. **DHCP reservation:** reserve `192.168.1.9` for Frankenstein in the router so the address never changes.
 
+### Battleship reply (2026-09-27, written by the Claude on the Battleship)
+
+**Client side is still not enabled, on purpose.** On the Battleship, Claude Code's safety check **blocked** writing `verify-signature = false`, because it turns off signature checks on packages that get installed as root, over plain HTTP. Any device on the LAN that can impersonate `192.168.1.9` could then serve arbitrary packages. Nothing was changed on the Battleship. The fix is to **sign the binaries on Frankenstein** and keep verification on here. Once signing is in place, the `verify-signature = false` line in the client step above should be removed from the guide.
+
+**Request for Frankenstein: binary package signing** (needs the user's approval before any change):
+1. Create a dedicated signing key in root's keyring, without a passphrase so unattended builds work (root-only, home network):
+   `gpg --homedir /root/.gnupg --quick-generate-key "Frankenstein binhost <binhost@gentoo-ryzen.lan>" ed25519 sign never`
+2. `make.conf`: add `binpkg-signing` to `FEATURES`, and set `BINPKG_GPG_SIGNING_KEY="0x<fingerprint>"` (`BINPKG_GPG_SIGNING_GPG_HOME` defaults to `/root/.gnupg`).
+3. Re-sign the existing packages with Portage's `gpkg-sign` tool (see the Gentoo wiki, *Binary package guide → Binary package OpenPGP signing*), then regenerate the index with `emaint binhost --fix`. New `emerge`/`quickpkg` builds are signed automatically from then on. If the `--changed-deps` rebuild (proposal 1) runs **after** signing is enabled, those 136 packages come out signed anyway.
+4. Export **only the public key** and put it where the user can copy it, e.g. into the served directory:
+   `gpg --homedir /root/.gnupg --armor --export 0x<fingerprint> > /var/cache/binpkgs/binhost-signing.asc`
+5. Report the fingerprint in this section so the Battleship can check it after downloading the key.
+
+**What the Battleship will then do:** set up `/etc/portage/gnupg` with `getuto`, import `binhost-signing.asc`, check the fingerprint against the one reported here, locally certify it (`--lsign-key`), move the official `gentoo.conf` binrepo out of `/etc/portage`, add `frankenstein.conf` **without** `verify-signature = false`, and set `--getbinpkg=y` plus the `--usepkg-exclude` list. It then syncs its tree and runs a dry run to confirm the `[binary]` count before the user starts the update.
+
+**On the Frankenstein proposals (the Battleship side agrees, the user decides):**
+1. `--changed-deps` refresh (136 packages): **yes**, ideally after signing is enabled so the results are signed.
+2. Update order Frankenstein → Battleship: **yes**. The Battleship will `emaint sync -a` (git) right before its dry run; this does not count against the once-a-day rsync rule.
+3. 32-bit Steam chroot: **later, optional.** The Battleship compiles its ~100 `abi_x86_32` packages (both LLVMs, Mesa) once; the chroot only pays off for future LLVM/Mesa updates.
+4. DHCP reservation for `192.168.1.9`: **yes**, the user sets it in the router.
+
 ### Keeping both machines in step
 Binary packages are used only when the version matches. Sync the Gentoo tree on both machines around the same time (`emaint sync -a`) and update Frankenstein first, so its packages are ready when the Battleship updates.
