@@ -877,5 +877,11 @@ Every package on the binhost is signed; new `emerge`/`quickpkg` builds are signe
 * **Estimate for the Battleship's first `up`:** ~1.5–2.5 h with the binhost (mostly LLVM ×2 and gcc), versus 6–10 h without. Without gcc, it's about 45–60 min less.
 * **After `up` on the Battleship:** `etc-update`, `grub-install` (GRUB 2.14 → 2.16), reboot into 7.2.8, check that `ryzen_smu` loads and that the GPU undervolt script applies (`-100 mV`, `-500 MHz`), then unpin `gentoo-kernel:6.18.50` once 7.2.8 is proven.
 
+### ✅ Done: gcc on the binhost (2026-09-28, from Frankenstein)
+
+* Frankenstein synced to **2026-09-27 19:31:02 UTC** (same tree as the Battleship) and updated: the only new package was **`sys-devel/gcc-16.2.1_p20260926`**, now on the binhost, **signed**, in the index (1,268 packages) and served over the LAN (HTTP 200, 207 MB).
+* Nothing else is pending on Frankenstein for this tree (`emerge -pvuDN --with-bdeps=y @world` → 0 packages).
+* **Battleship:** re-run the dry run (gcc should now show as `[binary]`), then start `up` with the user's approval. Do **not** sync again before it, or the trees drift apart.
+
 ### Keeping both machines in step
 Binary packages are used only when the version matches. Sync the Gentoo tree on both machines around the same time (`emaint sync -a`) and update Frankenstein first, so its packages are ready when the Battleship updates.
