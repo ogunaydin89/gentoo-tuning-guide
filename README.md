@@ -42,7 +42,7 @@ git clone https://codeberg.org/helinesca/gentoo-tuning-guide.git
 ---
 
 ## 📋 Hardware Fleet & Reference Specs
-* **Current Rig (Workhorse / Frankenstein):** AMD Ryzen 7 5700X (8c/16t, Zen 3 Vermeer), AMD Radeon RX 6650 XT (8GB VRAM), 16 GB DDR4 RAM.
+* **Current Rig (Workhorse / Frankenstein):** AMD Ryzen 7 5700X (8c/16t, Zen 3 Vermeer), AMD Radeon RX 6650 XT (8GB VRAM), 16 GB DDR4 RAM. Also the **home binhost** for the Battleship (section 17).
 * **Battleship Rig (Main Gaming):** AMD Ryzen 7 5800X3D (8c/16t, 96MB 3D V-Cache), AMD Radeon RX 9070 XT (RDNA 4), 32 GB RAM.
 * **School Office PC:** AMD Ryzen 5 5600G (6c/12t, Zen 3 APU), NVIDIA GeForce GTX 1650 (4GB VRAM), 16 GB RAM. Runs **Windows 11**, not Gentoo; the Gentoo, kernel and OpenRC sections of this guide do not apply to it.
 * **Init System:** OpenRC (Gentoo 23.0 profile)
@@ -584,7 +584,7 @@ export PYTORCH_HIP_ALLOC_CONF="garbage_collection_threshold:0.6,max_split_size_m
 ## 14. 🎯 Clean Native Execution Policy
 
 * **Pure Native Binary Execution:** Avoid bloated runtime wrappers and overlays (`gamemode`, `mangohud`, `gamescope`) for minimum translation overhead and maximum framerate stability.
-* **Source-First Compilation:** Always compile software from source (`emerge --oneshot` / `emerge -1vUD @world`).
+* **Source-First Compilation:** Always compile software from source (`emerge --oneshot` / `emerge -1vUD @world`). The only binary packages allowed are those from the home binhost (section 17), which are themselves compiled from source with the fleet's shared configuration. Never use Gentoo's official binhost.
 
 ---
 
@@ -608,3 +608,55 @@ export PYTORCH_HIP_ALLOC_CONF="garbage_collection_threshold:0.6,max_split_size_m
 ## 16. 🔄 Codeberg Master Guide Synchronization Directive
 
 * **Continuous Repository Synchronization:** Whenever system tuning directives, kernel policies, or hardware rules are updated in the agent's brain or system rules, ALWAYS update `/home/helin/gentoo-tuning-guide/README.md`, commit, and push directly to Codeberg (`https://codeberg.org/helinesca/gentoo-tuning-guide`).
+
+---
+
+## 17. 📦 Home Binhost (Frankenstein → Battleship)
+
+Frankenstein compiles, the Battleship installs the finished packages. This works because both machines share the **same CPU target (`znver3`, Zen 3 Vermeer)**, the same `CPU_FLAGS_X86`, the same profile (`default/linux/amd64/23.0/desktop/plasma`, OpenRC), the same global `USE` line and `ACCEPT_KEYWORDS="~amd64"`. The 5800X3D's extra L3 cache changes performance, not the instruction set.
+
+### Binhost side (Frankenstein, `gentoo-ryzen`, `192.168.1.9`)
+* **Package store:** `PKGDIR=/var/cache/binpkgs`, format `gpkg`, lz4-compressed.
+* **Every compile saves a package:** `FEATURES="ccache parallel-fetch parallel-install buildpkg"` in `make.conf`.
+* **Initial fill without recompiling:** all installed packages were packed once with
+  ```bash
+  quickpkg --include-unmodified-config=y "*/*"
+  ```
+  `--include-unmodified-config=y` keeps default config files but leaves out every config file changed locally, so personal settings stay on Frankenstein. `quickpkg` creates root-only (`750`) folders, so afterwards: `chmod -R a+rX /var/cache/binpkgs`. Packages built by `emerge` are readable (`644`/`755`) automatically.
+* **Serving:** `www-servers/lighttpd` on port **8080**, `/etc/lighttpd/lighttpd.conf`:
+  ```text
+  var.logdir = "/var/log/lighttpd"
+  server.modules = ( "mod_accesslog" )
+  include "/etc/lighttpd/mime.conf"
+  server.username      = "lighttpd"
+  server.groupname     = "lighttpd"
+  server.document-root = "/var/cache/binpkgs"
+  server.port          = 8080
+  server.use-ipv6      = "disable"
+  server.pid-file      = "/run/lighttpd.pid"
+  server.errorlog      = var.logdir + "/error.log"
+  accesslog.filename   = var.logdir + "/access.log"
+  ```
+  No `server.bind`: the address comes from DHCP, and a bind to a changed address would stop lighttpd from starting at boot. Started at boot with `rc-update add lighttpd default`.
+* **Firewall:** `ufw allow from 192.168.1.0/24 to any port 8080 proto tcp comment 'binhost (lighttpd)'`. Only the home network can reach it.
+* **Recommended:** reserve `192.168.1.9` for Frankenstein in the router (DHCP reservation).
+* ⚠️ **Never forward port 8080 on the router.** The binhost has no signing and no authentication; it relies on being reachable only inside the home network. (Optional hardening: `FEATURES="binpkg-signing"` on the binhost and `binpkg-request-signature` on clients.)
+
+### Client side (Battleship)
+1. **Check:** `curl -s -o /dev/null -w "HTTP %{http_code}\n" http://192.168.1.9:8080/Packages` → `HTTP 200`.
+2. **Remove Gentoo's official binhost** (usually `/etc/portage/binrepos.conf/gentoobinhost.conf`, section `[gentoo]`) and add `/etc/portage/binrepos.conf/frankenstein.conf`:
+   ```ini
+   [frankenstein]
+   priority = 10
+   sync-uri = http://192.168.1.9:8080
+   ```
+3. **`make.conf`:** in `EMERGE_DEFAULT_OPTS`, `--getbinpkg=n` → `--getbinpkg=y`; keep `--binpkg-respect-use=y`, and add
+   `--usepkg-exclude="sys-kernel/gentoo-kernel virtual/dist-kernel app-admin/ryzen_smu"`.
+   The kernel and out-of-tree kernel modules are built for Frankenstein's own kernel (`-5700v6650`, savedconfig) and must always be compiled on the Battleship itself.
+4. **Test:** `emerge --pretend --verbose --getbinpkg sys-block/parted` → the line starts with `[binary`. Then `emerge --pretend --verbose --update --deep --newuse @world`: `[binary …]` comes from the binhost, `[ebuild …]` is still compiled locally.
+
+### What the Battleship still compiles itself
+Anything not installed on Frankenstein (Steam, Chrome), packages whose USE flags differ (the 32-bit `abi_x86_32` variants for Steam: Mesa, LLVM, glibc, …), the kernel and kernel modules.
+
+### Keeping both machines in step
+Binary packages are used only when the version matches. Sync the Gentoo tree on both machines around the same time (`emaint sync -a`) and update Frankenstein first, so its packages are ready when the Battleship updates.
