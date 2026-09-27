@@ -429,7 +429,7 @@ ACCEPT_LICENSE="*"
 # Target architecture & hardware
 GRUB_PLATFORMS="efi-64"
 VIDEO_CARDS="amdgpu radeonsi"
-CPU_FLAGS_X86="adx aes avx avx2 bmi1 bmi2 f16c fma3 mmx mmxext pclmul popcnt rdrand rdseed sha sse sse2 sse3 sse4_1 sse4_2 sse4a ssse3 vaes vpclmulqdq"
+CPU_FLAGS_X86="aes avx avx2 bmi1 bmi2 f16c fma3 mmx mmxext pclmul popcnt rdrand sha sse sse2 sse3 sse4_1 sse4_2 sse4a ssse3 vpclmulqdq"
 
 # Global USE flags (Debloated: No Bluetooth, Printing, or Cellular Modems)
 USE="wayland pipewire pipewire-alsa wireplumber elogind dbus udev policykit lz4 zstd zram pulseaudio alsa vulkan opengl vdpau vaapi hwaccel screencast networkmanager sddm plasma dav1d svt-av1 jpegxl avif heif opus x264 x265 -systemd -telemetry -bluetooth -cups -modemmanager -handbook -doc -test"
@@ -607,7 +607,7 @@ export PYTORCH_HIP_ALLOC_CONF="garbage_collection_threshold:0.6,max_split_size_m
 
 ## 16. 🔄 Codeberg Master Guide Synchronization Directive
 
-* **Continuous Repository Synchronization:** Whenever system tuning directives, kernel policies, or hardware rules are updated in the agent's brain or system rules, ALWAYS update `/home/helin/gentoo-tuning-guide/README.md`, commit, and push directly to Codeberg (`https://codeberg.org/helinesca/gentoo-tuning-guide`).
+* **Continuous Repository Synchronization:** Whenever system tuning directives, kernel policies, or hardware rules are updated in the agent's brain or system rules, ALWAYS update `~/gentoo-tuning-guide/README.md` (Frankenstein: `/home/helin/…`, Battleship: `/home/ogun/…`), commit, and push directly to Codeberg (`https://codeberg.org/helinesca/gentoo-tuning-guide`).
 
 ---
 
@@ -649,7 +649,9 @@ Frankenstein compiles, the Battleship installs the finished packages. This works
    [frankenstein]
    priority = 10
    sync-uri = http://192.168.1.9:8080
+   verify-signature = false
    ```
+   ⚠️ **`verify-signature = false` is required.** Current Portage verifies binary package signatures by default (`verify-signature = true` in `/usr/share/portage/config/binrepos.conf`, see Gentoo news `2026-05-03-portage-binpkg-changes`). The home binhost does not sign, so without this line every binary from Frankenstein is rejected. If `binpkg-signing` is set up on Frankenstein later, remove this line and import the public key into `/etc/portage/gnupg` on the Battleship instead.
 3. **`make.conf`:** in `EMERGE_DEFAULT_OPTS`, `--getbinpkg=n` → `--getbinpkg=y`; keep `--binpkg-respect-use=y`, and add
    `--usepkg-exclude="sys-kernel/gentoo-kernel virtual/dist-kernel app-admin/ryzen_smu"`.
    The kernel and out-of-tree kernel modules are built for Frankenstein's own kernel (`-5700v6650`, savedconfig) and must always be compiled on the Battleship itself.
@@ -657,6 +659,28 @@ Frankenstein compiles, the Battleship installs the finished packages. This works
 
 ### What the Battleship still compiles itself
 Anything not installed on Frankenstein (Steam, Chrome), packages whose USE flags differ (the 32-bit `abi_x86_32` variants for Steam: Mesa, LLVM, glibc, …), the kernel and kernel modules.
+
+### Battleship status report (2026-09-27, written by the Claude on the Battleship)
+
+**Binhost verified from the Battleship:** `http://192.168.1.9:8080/Packages` → `HTTP 200`. Client side **not yet enabled** on the Battleship (still `--getbinpkg=n`, official `gentoo.conf` binrepo still present but unused).
+
+**Dry run with the binhost** (scratch config copy, `verify-signature = false`, kernel exclusions as above), `emerge -pvuDN --with-bdeps=y @world`:
+* **475 packages total, 371 as binaries** from Frankenstein (gcc 16, glibc, perl 5.44, Qt/KDE, ffmpeg, linux-firmware, …), 3.5 GB download.
+* **104 still compile on the Battleship**, mainly: `llvm-core/llvm` 22 **and** 23 (both with `abi_x86_32` for Steam's 32-bit Mesa), `media-libs/mesa`, `sys-kernel/gentoo-kernel-7.2.8`, `app-admin/ryzen_smu`, `games-util/steam-launcher`, and the ~70 `abi_x86_32` libraries.
+* Ignored "due to changed dependencies" (version/subslot skew, rebuild on Frankenstein will fix): `sys-apps/coreutils`, `app-shells/zsh`, `net-misc/curl`, `dev-libs/libgcrypt`, `dev-util/patchelf`, `x11-misc/xdg-utils`, `dev-perl/Socket6`.
+* **To make the 32-bit Steam stack binary too**, Frankenstein's build chroot must carry the Battleship's `package.use/steam` (below). Otherwise those always compile locally.
+
+**CPU flags:** `adx`, `rdseed` and `vaes` no longer exist in `profiles/desc/cpu_flags_x86.desc`, so `cpuid2cpuflags` (v17) no longer prints them and Portage ignores them. Both 5700X and 5800X3D resolve `-march=native` to `znver3`. The CPU_FLAGS line in section 11 is updated; the extra flags were harmless, just stale.
+
+**Battleship Portage changes made on 2026-09-27** (the binhost chroot should mirror these):
+* `package.use/steam`: added `sys-libs/gdbm abi_x86_32` and `sys-libs/readline abi_x86_32` (required by 32-bit `sys-libs/pam` via `sys-libs/libcap`; without them `@world` does not resolve).
+* `package.use/02-fixes.conf`: `sys-libs/ncurses -gpm` (breaks the 32-bit ncurses ↔ gpm circular dependency; gpm is console-mouse only).
+* `package.use/10-modules`: `app-admin/ryzen_smu dist-kernel` (module rebuilds automatically on every new kernel).
+* `package.use/00-kernel.conf`: `savedconfig` **removed** for now. The running 6.18.50 kernel is the full generic build (4,905 modules); the stripped 103-module savedconfig in this repo was made on Frankenstein's hardware and must not be reused on the Battleship. A Battleship-specific stripped config will be made later.
+* `make.conf`: `--autounmask-write=y --autounmask-continue=y` removed from `EMERGE_DEFAULT_OPTS` (no silent config rewrites during unattended updates).
+* `@world`: fixed wrong atoms (`kde-plasma/spectacle`, `gui-apps/xwaylandvideobridge`), removed `media-video/vlc`, and pinned `sys-kernel/gentoo-kernel:6.18.50` as the known-good fallback until 7.2.8 has booted.
+* `~/.zshrc`: `up` alias added (the default shell is zsh; the alias previously existed only in `.bashrc`).
+* ⚠️ **Pitfall:** Portage reads **every** file in `package.use/` etc., including backups like `foo.bak`. Never keep backups inside `/etc/portage`.
 
 ### Keeping both machines in step
 Binary packages are used only when the version matches. Sync the Gentoo tree on both machines around the same time (`emaint sync -a`) and update Frankenstein first, so its packages are ready when the Battleship updates.
