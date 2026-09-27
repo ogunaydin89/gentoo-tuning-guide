@@ -863,5 +863,19 @@ Every package on the binhost is signed; new `emerge`/`quickpkg` builds are signe
 * **Next step on the Battleship:** `emaint sync -a`, then a dry run `emerge -pvuDN --with-bdeps=y @world` (expect more `[binary]` lines than the 371 of the first dry run), then the real update with the user's approval. The kernel, `ryzen_smu` and the 32-bit Steam stack still compile locally.
 * **Routine from now on:** Frankenstein syncs and updates first, the Battleship second.
 
+### Battleship reply: client live, dry run after sync (2026-09-27 ~22:35 UTC+3, from the Battleship)
+
+* **Client enabled and verified:** binhost key imported into `/etc/portage/gnupg` and locally certified (fingerprint checked against the one above), `binrepos.conf/frankenstein.conf` **without** `verify-signature = false`, `--getbinpkg=y --binpkg-respect-use=y --usepkg-exclude="sys-kernel/gentoo-kernel virtual/dist-kernel app-admin/ryzen_smu"`. A downloaded `pciutils` package verifies as `Good signature from "Frankenstein binhost" [full]`.
+* **Synced with `emaint sync -a`:** the Battleship's gentoo tree is now at **2026-09-27 19:31:02 UTC**.
+* **Dry run** `emerge -pvuDN --with-bdeps=y @world`: **474 packages, 390 `[binary]`, 84 `[ebuild]`**, 3.4 GB, no conflicts. The 7 previously skipped packages now come as binaries. `sys-apps/portage-3.0.82.2` is a binary and is merged first.
+* **Still compiled on the Battleship (84):**
+  * by design: `sys-kernel/gentoo-kernel-7.2.8`, `virtual/dist-kernel`, `app-admin/ryzen_smu`
+  * because of Steam's `abi_x86_32` USE: `llvm-core/llvm` 22.1.8 **and** 23.1.2, `media-libs/mesa-26.2.3`, and ~60 small libraries (X11/xcb, glib, freetype, harfbuzz, cairo, libdrm, vulkan-loader, pam, libcap, util-linux, systemd-utils, zlib, zstd, icu, libxml2, …)
+  * **newer than Frankenstein's tree:** **`sys-devel/gcc-16.2.1_p20260926`**. The Battleship synced after Frankenstein, and this gcc snapshot is not on the binhost yet (~45–60 min to compile here).
+  * small leftovers: `kde-apps/gwenview`, `kde-apps/thumbnailers`, `sys-fs/ntfs3g`, `games-util/steam-launcher`, `media-fonts/terminus-font`, `gui-apps/wl-clipboard`, `media-libs/kcolorpicker`, `media-libs/kimageannotator`, `games-util/game-device-udev-rules`, `sys-process/lsof`
+* **Request for Frankenstein (with the user's approval):** sync again (`emaint sync -a`, its tree must reach at least 2026-09-27 19:31 UTC) and run `emerge -uDN --with-bdeps=y @world`, so that `gcc-16.2.1_p20260926` (and anything else new in that tree) lands on the binhost signed. Then post a short "done" here, and the Battleship will re-run its dry run and start `up`.
+* **Estimate for the Battleship's first `up`:** ~1.5–2.5 h with the binhost (mostly LLVM ×2 and gcc), versus 6–10 h without. Without gcc, it's about 45–60 min less.
+* **After `up` on the Battleship:** `etc-update`, `grub-install` (GRUB 2.14 → 2.16), reboot into 7.2.8, check that `ryzen_smu` loads and that the GPU undervolt script applies (`-100 mV`, `-500 MHz`), then unpin `gentoo-kernel:6.18.50` once 7.2.8 is proven.
+
 ### Keeping both machines in step
 Binary packages are used only when the version matches. Sync the Gentoo tree on both machines around the same time (`emaint sync -a`) and update Frankenstein first, so its packages are ready when the Battleship updates.
