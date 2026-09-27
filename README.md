@@ -43,7 +43,7 @@ git clone https://codeberg.org/helinesca/gentoo-tuning-guide.git
 
 ## 📋 Hardware Fleet & Reference Specs
 * **Current Rig (Workhorse / Frankenstein):** AMD Ryzen 7 5700X (8c/16t, Zen 3 Vermeer), AMD Radeon RX 6650 XT (8GB VRAM), 16 GB DDR4 RAM. Also the **home binhost** for the Battleship (section 17).
-* **Battleship Rig (Main Gaming):** AMD Ryzen 7 5800X3D (8c/16t, 96MB 3D V-Cache), AMD Radeon RX 9070 XT (RDNA 4), 32 GB RAM.
+* **Battleship Rig (Main Gaming):** AMD Ryzen 7 5800X3D (8c/16t, 96MB 3D V-Cache), AMD Radeon RX 9070 XT (RDNA 4, **Sapphire Nitro+**, PCI subsystem `1da2:e489`, 340 W board power, 12V-2x6 connector), 32 GB RAM.
 * **School Office PC:** AMD Ryzen 5 5600G (6c/12t, Zen 3 APU), NVIDIA GeForce GTX 1650 (4GB VRAM), 16 GB RAM. Runs **Windows 11**, not Gentoo; the Gentoo, kernel and OpenRC sections of this guide do not apply to it.
 * **Init System:** OpenRC (Gentoo 23.0 profile)
 * **Desktop Environment:** KDE Plasma 6 + Wayland + PipeWire
@@ -206,6 +206,61 @@ cat /sys/class/drm/card*/device/pp_od_clk_voltage
 # Check boot log:
 cat /var/log/amdgpu-undervolt.log
 ```
+
+
+#### Reference Implementation: Sapphire Nitro+ RX 9070 XT (Navi 48 / RDNA 4), Battleship
+
+**RDNA 4 uses offsets, not absolute clocks.** `pp_od_clk_voltage` on Navi 48 has **no max-clock state** (the RDNA 2 command `s 1 <MHz>` fails with `Invalid argument`). Instead it offers:
+```text
+OD_SCLK_OFFSET:   shift of the card's internal maximum GFX clock   range -500 .. +1000 MHz
+OD_VDDGFX_OFFSET: voltage offset                                    range -200 .. 0 mV
+OD_MCLK:          memory clock range                                97 .. 1500 MHz
+```
+Commands: `vo <mV>` (voltage offset), `s <MHz>` (clock offset, **one** number, no index), `c` (commit). Read back with `cat /sys/class/drm/card0/device/pp_od_clk_voltage`.
+
+**The internal maximum is far above the advertised boost.** Nitro+ specs: game clock 2520 MHz (the top level shown in `pp_dpm_sclk`), boost "up to 3060 MHz". Measured under full load: **3307 MHz** at stock clocks with -60 mV, power-limited at 347 W. Working back from the capped runs, the internal maximum is **~3430 MHz**. So `offset = target − 3060` does **not** work; measure instead.
+
+**How it was measured (no extra packages needed):** a full-screen WebGL2 fragment-shader loop in a throwaway Chrome profile (`google-chrome-stable --user-data-dir=<tmp> --ozone-platform=wayland file://…/gpuload.html`), sampling `hwmon/freq1_input`, `power1_average` and `temp1_input` every 0.2 s for 20 s. (`vkcube` would do as well, but `dev-util/vulkan-tools` needs `USE=cube` for it.)
+
+| Setting | Peak clock | Average clock | Power (avg / peak) | Edge temp |
+|---|---|---|---|---|
+| -60 mV, no offset | 3307 MHz | 3213 MHz | ~347 W (power limit) | 48 °C |
+| -100 mV, -407 MHz | 3023 MHz | 2970 MHz | 207 W / 244 W | 49 °C |
+| **-100 mV, -500 MHz (daily)** | **2932 MHz** | **2882 MHz** | **236 W / 276 W** | 52 °C |
+
+The target was -100 mV with a 2900 MHz ceiling. **-500 MHz is the driver's lower limit**, so ~2930 MHz is the lowest reachable cap on this card. Result: about 10 % less clock for **~110 W less** power. No `amdgpu` errors in `dmesg` during the tests.
+
+##### OpenRC Persistent Startup Script (`/etc/local.d/amdgpu-undervolt.start`):
+```bash
+#!/bin/bash
+# Gentoo OpenRC - Sapphire Nitro+ RX 9070 XT (Navi 48 / RDNA 4) undervolt + clock cap
+# RDNA 4 has no absolute max-clock setting, only an offset from the card's internal
+# maximum (~3430 MHz on this card). Driver range: SCLK_OFFSET -500..+1000 MHz,
+# VDDGFX_OFFSET -200..0 mV. -500 MHz is the lowest allowed and caps boost at ~2930 MHz
+# (measured 2026-09-27: avg 2882 MHz, peak 2932 MHz, ~236 W under full load).
+# Wait up to 20 seconds for the GPU driver to initialize.
+
+for i in {1..20}; do
+    for card in /sys/class/drm/card*/device/pp_od_clk_voltage; do
+        if [ -w "$card" ]; then
+            echo "vo -100" > "$card"
+            echo "s -500" > "$card"
+            echo "c" > "$card"
+            echo "[$(date)] Applied -100mV voltage offset and -500MHz clock offset (~2930MHz cap) to $card" >> /var/log/amdgpu-undervolt.log
+            exit 0
+        fi
+    done
+    sleep 1
+done
+
+echo "[$(date)] Timed out waiting for amdgpu pp_od_clk_voltage node" >> /var/log/amdgpu-undervolt.log
+exit 1
+```
+Requires `amdgpu.ppfeaturemask=0xffffffff` on the kernel command line (already in the Battleship's GRUB line) so that OverDrive is writable.
+
+**Stability:** a 20-second load test is not a stability proof. If a game crashes, or the screen freezes and the driver recovers (`amdgpu … ring … timeout` / `GPU reset` in `dmesg`), go back to `vo -80` first and keep `s -500`.
+
+**No LACT on the Battleship.** An Ubuntu `.deb` copy of LACT had been dropped into `/usr/bin` without Portage. It never ran (missing `libadwaita-1.so.0` and `libdisplay-info.so.1`), and its OpenRC service `lactd` respawned every 2 s since boot. It was removed on 2026-09-27. The only ebuild (`sys-apps/lact` in GURU) is not an option: GURU is never used on this fleet, and it needs `libdisplay-info:0/3` anyway. The `/etc/local.d` script above covers everything that was needed.
 
 ---
 
