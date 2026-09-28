@@ -12,7 +12,9 @@ for i in {1..20}; do
             echo "vo -100" > "$card"
             echo "s -500" > "$card"
             echo "c" > "$card"
-            echo "[$(date)] Applied -100mV voltage offset and -500MHz clock offset (~2930MHz cap) to $card" >> /var/log/amdgpu-undervolt.log
+            # 3D_FULL_SCREEN workload profile: faster clock ramp-up in games (smoother frame times)
+            echo "1" > "${card%/*}/pp_power_profile_mode"
+            echo "[$(date)] Applied -100mV voltage offset, -500MHz clock offset (~2930MHz cap) and 3D_FULL_SCREEN profile to $card" >> /var/log/amdgpu-undervolt.log
             exit 0
         fi
     done

@@ -385,6 +385,9 @@ net.ipv4.tcp_wmem = 4096 65536 16777216
 
 # Gaming: don't stall split-lock accesses (SteamOS default)
 kernel.split_lock_mitigate = 0
+
+# Gaming: no proactive background memory compaction (avoids occasional mid-game hitches)
+vm.compaction_proactiveness = 0
 ```
 **Why:**
 - `page-cluster = 0`: zram swaps single pages; read-ahead only wastes work.
@@ -392,6 +395,7 @@ kernel.split_lock_mitigate = 0
 - `watermark_boost_factor = 0`: avoids kswapd wake-ups that cause random 50–100 ms stutters.
 - `max_map_count`: some Proton games need far more memory mappings than the default.
 - `split_lock_mitigate = 0`: by default the kernel deliberately slows down programs that do split-lock memory accesses; some Unity and older games do this constantly and slow down badly.
+- `compaction_proactiveness = 0`: the kernel no longer defragments memory in the background (default 20); compaction still happens when something actually needs large pages.
 
 **Verify:** each key with `sysctl <key>`, e.g. `sysctl vm.swappiness kernel.split_lock_mitigate`.
 
@@ -575,7 +579,9 @@ for i in {1..20}; do
             echo "vo -100" > "$card"
             echo "s -500" > "$card"
             echo "c" > "$card"
-            echo "[$(date)] Applied -100mV voltage offset and -500MHz clock offset (~2930MHz cap) to $card" >> /var/log/amdgpu-undervolt.log
+            # 3D_FULL_SCREEN workload profile: faster clock ramp-up in games (smoother frame times)
+            echo "1" > "${card%/*}/pp_power_profile_mode"
+            echo "[$(date)] Applied -100mV voltage offset, -500MHz clock offset (~2930MHz cap) and 3D_FULL_SCREEN profile to $card" >> /var/log/amdgpu-undervolt.log
             exit 0
         fi
     done
@@ -585,6 +591,8 @@ echo "[$(date)] Timed out waiting for amdgpu pp_od_clk_voltage node" >> /var/log
 exit 1
 ```
 If a game crashes or `dmesg` shows `ring … timeout` / `GPU reset`, go back to `vo -80` first and keep `s -500`.
+
+The script also sets the **`3D_FULL_SCREEN` power profile** (`pp_power_profile_mode` = 1, default `BOOTUP_DEFAULT`): the GPU raises and holds its clocks faster in games, which smooths frame times in lighter or CPU-bound scenes where it would otherwise downclock between frames. Slightly more power while gaming, none at idle. It works in the `auto` performance level; no `manual` mode needed.
 
 No LACT: the only ebuild is in GURU (never used on this fleet), and an unpackaged copy once dropped into `/usr/bin` never ran and respawned every 2 s. The script above covers everything needed.
 
@@ -777,6 +785,7 @@ After a reboot, every line should give the expected result.
 | Modules | `lsmod \| grep -E 'nct6683\|ntsync\|ryzen_smu'` | three modules |
 | Sensors | `sensors` | `nct6687` fans, `k10temp`, `amdgpu`, `nvme` |
 | Undervolt | `cat /sys/class/drm/card*/device/pp_od_clk_voltage` | `-500Mhz`, `-100mV` |
+| GPU profile | `grep '\*' /sys/class/drm/card*/device/pp_power_profile_mode` | `3D_FULL_SCREEN*` |
 | CPU | `cat /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference` | `performance` |
 | Services | `rc-status -a \| grep -E 'stopped\|crashed'` | only `savecache`, `killprocs`, `mount-ro` (shutdown services) |
 | Sysctls | `sysctl vm.swappiness kernel.split_lock_mitigate net.ipv4.tcp_congestion_control` | `10`, `0`, `bbr` |
@@ -928,6 +937,8 @@ Frankenstein compiles, the Battleship installs. It works because both have the s
 - `consolefont` fails at boot without `rc_need="udev-settle"` (4.14).
 - Mounting a tmpfs over `/tmp` in a running session hides live sockets (4.4).
 - A GRUB package upgrade does not update the EFI loader; run `grub-install` (3.2).
+- `cpuidle.governor=teo` does nothing on Gentoo's kernel config: only the `menu` governor is built (`CONFIG_CPU_IDLE_GOV_TEO` unset). It would need the kernel option too.
+- sched_ext (`scx_lavd` etc.) needs `CONFIG_DEBUG_INFO_BTF`, i.e. kernel debug info, which `gentoo-kernel -debug` turns off. Not used here.
 - Harmless kernel messages: `amdgpu … Unsupported screen format RA24` at login (KWin tries a pixel format the display engine rejects, then falls back); `clocksource: Watchdog remote CPU … read timed out` (a skipped cross-check; the TSC stays active); `Setting dangerous option gpu_recovery - tainting kernel`.
 
 **Hardware**
