@@ -61,5 +61,8 @@ zle -N fzf-history-widget _fzf_history_wrapper
 # Gentoo full system update (see gentoo-tuning-guide section 12)
 alias up='sudo zsh -c "eix-sync && emerge -vuDN --with-bdeps=y --keep-going @world && emerge --depclean"'
 
+# zoxide: `z <part of dir>` jumps to frequently used directories
+command -v zoxide >/dev/null && eval "$(zoxide init zsh)"
+
 # Syntax highlighting (app-shells/zsh-syntax-highlighting); must stay at the end
 [ -f /usr/share/zsh/site-functions/zsh-syntax-highlighting.zsh ] && source /usr/share/zsh/site-functions/zsh-syntax-highlighting.zsh
