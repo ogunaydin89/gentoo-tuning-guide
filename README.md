@@ -3,7 +3,7 @@
 A step-by-step guide to the Gentoo setup used on a small fleet of AMD Ryzen + Radeon machines: low-latency kernel, gaming tuning, a home binhost, and the maintenance routine that keeps it all working. Everything here is verified on real hardware; the reference files for each machine are in [`etc/`](etc/) and [`home/`](home/).
 
 ```bash
-git clone https://codeberg.org/helinesca/gentoo-tuning-guide.git
+git clone https://github.com/ogunaydin89/gentoo-tuning-guide.git
 ```
 
 ## Contents
@@ -954,4 +954,8 @@ export PYTORCH_HIP_ALLOC_CONF="garbage_collection_threshold:0.6,max_split_size_m
 - **No layers, no bloat.** Plain Steam; no gamemode, MangoHud or gamescope. Install a package only when it fills a real gap.
 - **No GURU overlay.**
 - **Kernel.** `sys-kernel/gentoo-kernel` built from source and kept in `@world`; the fragment check after every new kernel; `linux-headers` at the newest version in the tree.
-- **This repository.** When a tuning, rule or fix changes on a machine, update this README and the files in `etc/<machine>/` to match the verified live state. Commit and push to Codeberg only with the user's approval.
+- **This repository.** When a tuning, rule or fix changes on a machine, update this README and the files in `etc/<machine>/` to match the verified live state. Commit and push to GitHub only with the user's approval.
+
+## License
+
+This guide is licensed under [CC BY 4.0](LICENSE) © Ogün Aydın: free to use, share and adapt, with credit.
