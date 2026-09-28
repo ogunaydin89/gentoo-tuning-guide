@@ -628,35 +628,53 @@ alias up='sudo zsh -c "eix-sync && emerge -vuDN --with-bdeps=y --keep-going @wor
 | **Verify Dynamic Links** | `sudo revdep-rebuild` |
 | **Clean Obsolete Distfiles** | `sudo eclean-dist -d -f` |
 | **Check Config File Updates** | `sudo etc-update --preen` / `sudo dispatch-conf` |
+| **Remove an Old Dist-Kernel** | `sudo emerge --deselect sys-kernel/gentoo-kernel:<ver>` (if pinned) → `sudo emerge --depclean '=sys-kernel/gentoo-kernel-<ver>'` → remove the leftover `/boot/{vmlinuz,initramfs,config,System.map}-<ver>…` and `/lib/modules/<ver>…` (not owned by any package, so depclean leaves them; `app-admin/eclean-kernel` automates this) → `sudo grub-mkconfig -o /boot/grub/grub.cfg` |
 
 ---
 
-### 🧹 Interactive FZF History Deletion Engine (`Ctrl-X`)
+### 🐚 Zsh Shell Setup (prompt, history, completion, FZF `Ctrl-R` / `Ctrl-X`)
 
-**Required Packages:** `app-shells/fzf`
+**Required Packages:** `app-shells/zsh` `app-shells/fzf` `dev-lang/perl` (fzf's `Ctrl-R` uses it for multi-line history), plus the extras `app-shells/zsh-completions` `app-shells/gentoo-zsh-completions` `app-shells/zsh-syntax-highlighting`.
 
-Allows instantaneous in-place deletion of sensitive commands, typos, or obsolete scripts directly from inside FZF's `Ctrl+R` fuzzy search:
+Gentoo ships **no system-wide `zshrc`**. Without a `~/.zshrc`, zsh shows the bare `hostname%` prompt, keeps **no history file**, and has no completion menu. Making zsh the login shell (`chsh -s /bin/zsh`) is not enough on its own.
 
-1. **Deletion Engine (`~/.local/bin/fzf-history-delete`)**:
-   * Resolves Zsh multi-line continuations (`\\\n` $\to$ `\n`), strips escape backslashes, and safely prunes matched commands from `~/.zsh_history`.
-   * Supports multi-item selections via `Tab`.
-2. **Fast Stream Reloader (`~/.local/bin/fzf-history-reload`)**:
-   * Re-evaluates `~/.zsh_history` in ~7ms and feeds the null-delimited stream directly back to FZF's `--read0` buffer for instant UI refresh.
-3. **Zsh Integration (`~/.zshrc`)**:
-   ```zsh
-   # Must source base bindings FIRST!
-   [ -f /usr/share/fzf/key-bindings.zsh ] && source /usr/share/fzf/key-bindings.zsh
-   [ -f /usr/share/fzf/key-bindings.bash ] && source /usr/share/fzf/key-bindings.bash
+Reference files in this repo (copy them to `~`):
+* [`home/.zshrc`](home/.zshrc): prompt `user@host ~/dir (git-branch) [exit code] %`, shared history in `~/.zsh_history` (100k entries, no duplicates, lines starting with a space are not saved), `compinit` with a menu, `~/.local/bin` in `PATH`, Home/End/Delete/Ctrl-arrow keys as Konsole sends them, Up/Down history search by prefix, the FZF integration below, the `up` alias, and syntax highlighting (must stay the **last** line).
+* [`home/.local/bin/fzf-history-delete`](home/.local/bin/fzf-history-delete): the `Ctrl-X` deletion engine.
 
-   export FZF_CTRL_R_OPTS="--bind 'ctrl-x:execute-silent(fzf-history-delete {+f})+reload(fzf-history-reload)' --header 'Ctrl-X: Delete entry | Ctrl-R: Toggle sort'"
-   _fzf_history_wrapper() {
-       fzf-history-widget "$@"
-       local ret=$?
-       fc -R 2>/dev/null
-       return $ret
-   }
-   zle -N fzf-history-widget _fzf_history_wrapper
-   ```
+The prompt ends in `%` for a normal user and `#` for root (`%#`); this is zsh's equivalent of bash's `$`.
+
+#### 🧹 FZF History Deletion Engine (`Ctrl-R`, then `Ctrl-X`)
+Deletes the selected entries (multi-select with `Tab`) straight from the `Ctrl-R` list:
+```zsh
+[ -f /usr/share/fzf/key-bindings.zsh ] && source /usr/share/fzf/key-bindings.zsh
+
+export FZF_CTRL_R_OPTS="--bind 'ctrl-x:execute-silent(fzf-history-delete {+f})+exclude-multi' --header 'Ctrl-X: Delete entry | Ctrl-R: Toggle sort'"
+_fzf_history_wrapper() {
+    fzf-history-widget "$@"
+    local ret=$?
+    local flag=${XDG_RUNTIME_DIR:-/tmp}/.zsh-history-edited-$UID
+    if [[ -e $flag ]]; then
+        # Drop the in-memory history and reload the pruned file
+        rm -f -- $flag
+        local hs=$HISTSIZE
+        HISTSIZE=0; HISTSIZE=$hs
+        fc -R
+    fi
+    return $ret
+}
+zle -N fzf-history-widget _fzf_history_wrapper
+```
+How it works, and why the first version did not:
+* fzf's `{+f}` passes the **path of a temp file** holding the selected lines (`NUM<TAB>command`, extra lines of multi-line commands start with a TAB), not the command text. The old script treated the path as the command, so nothing was ever deleted, and its unescaped `sed` pattern could delete the wrong lines for commands containing `|` or regex characters.
+* The new script is a `zsh -fi` script: zsh itself reads `~/.zsh_history` (`fc -R`), drops entries whose text matches exactly, and writes the file back (`fc -W`). This handles multi-line commands, non-ASCII text (zsh stores it metafied) and special characters. It needs `-i`, because a non-interactive zsh silently writes no history. It also works around `$history` lagging one entry behind by adding a dummy entry. Tested: 20,000 entries in about 1 s.
+* `exclude-multi` (present in fzf 0.74, the version used here) removes the entries from the open list, so the event numbers of the other entries stay valid. `fzf-history-reload` is no longer used.
+* `~/.local/bin` must be in `PATH` (it is, in `home/.zshrc`), or `Ctrl-X` fails silently.
+
+#### ⚠️ Zsh pitfalls for Gentoo commands
+* **Quote `=`-atoms:** in zsh, a word starting with `=` is replaced by a command path (`EQUALS`), so `emerge --depclean =sys-kernel/gentoo-kernel-6.18.50` fails with `sys-kernel/gentoo-kernel-6.18.50 not found`. Write `'=sys-kernel/gentoo-kernel-6.18.50'`.
+* **Globs in root-only directories:** in `sudo rm /boot/*6.18.50*`, the `*` is expanded by *your* shell before `sudo`, and `/boot` is `drwx------ root`, so zsh stops with `no matches found`. Use exact file names, or `sudo zsh -c '...'`.
+* **A leading `!` inverts the exit status** (`! cmd` → runs `cmd`, `[1]` on success). In `! a && b`, `b` never runs when `a` succeeds.
 
 ### 🛡️ Safe Configuration Merging (`etc-update`)
 
@@ -672,6 +690,78 @@ After running `up`, Portage may warn: `* IMPORTANT: X config files in '/etc' nee
    * If the diff only contains harmless upstream comment updates or new default variables.
 3. **AUTO-MERGE TRIVIAL (Press `-5`):**
    * Safely and automatically merges files where you have made zero manual modifications.
+
+**The automatic modes** (from `/usr/bin/etc-update`): `-3` replaces **all** your files with the new defaults, `-5` does the same without `mv -i` prompts. **Never use either on this system.** `-7` **discards all updates** and keeps your files (it asks `rm: remove '._cfg…'?` per file; answer `y`), `-9` does the same after one `YES`. Files that differ only in comments are auto-merged by etc-update itself ("Automerging trivial changes").
+
+**Real case (Battleship, 2026-09-28, after the 7.2.8 update):** the new `/etc/rc.conf` would have removed `rc_parallel="YES"`, `unicode`, `rc_tty_number=12` and `rc_shell`; the new `/etc/default/grub` would have removed the whole kernel command line (`amd_pstate=active`, `amdgpu.dcdebugmask=0x10`, `gpu_recovery=1`, `ppfeaturemask`). Both were rejected; `/etc/conf.d/hostname` was comments only and auto-merged.
+
+---
+
+## 12a. 📦 What to Install (Battleship Reference Package Set)
+
+The Battleship's `@world` (`/var/lib/portage/world`, 2026-09-28), grouped by purpose. With the home binhost (section 17) almost all of it arrives as signed binaries; always check first with `emerge -pv <packages>` (`[binary …]` vs `[ebuild …]`). Use `--noreplace` when some of them may already be installed.
+
+### 1. Prerequisites: install these first
+The configs in this guide call these tools; without them builds, updates or boot scripts fail.
+
+| Package | Needed by |
+| :--- | :--- |
+| `sys-devel/mold` | `LDFLAGS`/`RUSTFLAGS` use `-fuse-ld=mold` (section 11); without it every link fails |
+| `dev-util/ccache` | `FEATURES="ccache"`, `CCACHE_DIR=/var/cache/ccache` |
+| `app-portage/eix` | `eix-sync` in the `up` alias |
+| `app-portage/gentoolkit` | `equery`, `revdep-rebuild`, `eclean-dist` (section 12) |
+| `app-portage/cpuid2cpuflags` | generating `CPU_FLAGS_X86` |
+| `app-admin/sudo`, `dev-vcs/git`, `app-eselect/eselect-repository` | the `up` alias, git sync, the `steam-overlay` repository |
+| `sys-kernel/gentoo-kernel`, `sys-kernel/installkernel` (`USE="dracut grub"`), `sys-kernel/linux-firmware`, `sys-boot/grub` | kernel section 1; `installkernel` puts kernel + initramfs in `/boot` and runs `grub-mkconfig` |
+| `app-arch/lz4` (pulled in by default) | `BINPKG_COMPRESS="lz4"` and the ZRAM script (section 5) |
+| `sys-power/power-profiles-daemon` | section 9 |
+| `sys-process/btop` | section 7 |
+| `app-shells/zsh`, `app-shells/fzf`, `dev-lang/perl` | login shell and `Ctrl-R`/`Ctrl-X` (section 12, *Zsh Shell Setup*) |
+| `app-admin/ryzen_smu` (`USE=dist-kernel`), `app-admin/ryzen_monitor` | Battleship CPU telemetry (section 2); `ryzen_smu` is always built locally |
+
+Portage settings these packages need (already in `etc/portage/package.use/` or described in section 17): `package.use/steam` with the `abi_x86_32` list (incl. `sys-libs/gdbm` and `sys-libs/readline`), `sys-libs/ncurses -gpm`, `app-admin/ryzen_smu dist-kernel`, `sys-kernel/gentoo-kernel -debug`.
+
+### 2. Desktop base
+`kde-plasma/plasma-meta` `x11-misc/sddm` `gui-libs/display-manager-init` `media-video/pipewire` `media-video/wireplumber` `net-misc/networkmanager` `kde-apps/konsole` `kde-apps/dolphin` `gui-apps/wl-clipboard` `gui-apps/xwaylandvideobridge` `kde-plasma/spectacle` `www-client/google-chrome`
+Fonts: `media-fonts/noto` `media-fonts/noto-emoji` `media-fonts/hack` `media-fonts/jetbrains-mono` `media-fonts/liberation-fonts` `media-fonts/corefonts` `media-fonts/ubuntu-font-family` `media-fonts/terminus-font`
+
+### 3. Everyday apps (needed: nothing else covers these)
+| Package | Why |
+| :--- | :--- |
+| `media-video/mpv` | video player (`media-video/vlc` was removed) |
+| `kde-apps/ark` `app-arch/7zip` `app-arch/unrar` `app-arch/zip` | archives in Dolphin (only `unzip` is there by default) |
+| `kde-apps/kate` | GUI text editor |
+| `kde-apps/okular` | PDF / document viewer |
+| `kde-apps/gwenview` | image viewer |
+| `kde-apps/ffmpegthumbs` `media-video/ffmpegthumbnailer` | video thumbnails in Dolphin (log out/in once) |
+| `media-plugins/gst-plugins-meta` | GStreamer codecs for apps that use it |
+| `sys-fs/dosfstools` `sys-fs/exfatprogs` `sys-fs/ntfs3g` | format / mount FAT, exFAT and NTFS drives |
+
+### 4. Hardware & diagnostics
+`sys-apps/pciutils` `sys-apps/usbutils` `dev-util/vulkan-tools` (`vulkaninfo`) `dev-util/clinfo` `media-video/libva-utils` (`vainfo`: on the RX 9070 XT, Mesa radeonsi decodes H.264, HEVC 10-bit and AV1 and encodes H.264/HEVC) `sys-process/nvtop` (GPU load, clocks, power; useful for the undervolt)
+Board sensors need no package: the in-kernel `nct6683` driver plus `/etc/modules-load.d/sensors.conf` (section 17, kernel config check).
+
+### 5. Gaming
+`games-util/steam-launcher` from `steam-overlay` (`eselect repository enable steam-overlay`), with `package.use/steam`. The 32-bit (`abi_x86_32`) stack it needs (LLVM, Mesa, ~70 libraries) is compiled locally unless Frankenstein carries the same `package.use/steam`.
+
+### 6. Shell extras
+`app-shells/zsh-completions` `app-shells/gentoo-zsh-completions` (Tab completion for `emerge`, `eselect`, `rc-service`, …) `app-shells/zsh-syntax-highlighting` (source it on the last line of `~/.zshrc`). `app-shells/zsh-autosuggestions` is not on the binhost (tiny compile).
+
+### 7. Optional
+`app-admin/eclean-kernel` (removes old kernels incl. `/boot` and `/lib/modules` leftovers), `app-misc/fastfetch`, `sys-fs/duf`, `net-misc/yt-dlp`, and CLI tools `sys-apps/ripgrep` `sys-apps/fd` `sys-apps/bat` `sys-apps/eza` `app-shells/zoxide` `sys-apps/plocate`.
+
+### 8. Not for the desktop
+Frankenstein-only: `www-servers/lighttpd` (binhost server), `net-firewall/ufw` (its binhost firewall; the Battleship currently runs no firewall service, still to be decided), `sys-process/numactl`, `sci-libs/gsl`.
+
+### One-shot install (Battleship, after the base system)
+```bash
+sudo emerge -av --noreplace \
+  sys-devel/mold dev-util/ccache app-portage/eix app-portage/gentoolkit app-portage/cpuid2cpuflags \
+  media-video/mpv kde-apps/ark app-arch/7zip app-arch/unrar app-arch/zip kde-apps/kate kde-apps/okular \
+  kde-apps/ffmpegthumbs media-video/ffmpegthumbnailer sys-fs/dosfstools sys-fs/exfatprogs \
+  media-video/libva-utils sys-process/nvtop \
+  app-shells/zsh-completions app-shells/gentoo-zsh-completions app-shells/zsh-syntax-highlighting
+```
 
 ---
 
@@ -901,6 +991,17 @@ Every line of the Battleship's `/etc/kernel/config.d/*.config` was compared with
 Everything else (HZ 1000, full preemption, HRTICK, SMT/MC, THP madvise, all module options) matches.
 
 **Frankenstein:** its copy of `10-zen3-gaming.config` has the same `CONFIG_MZEN3=y` and no `RCU_EXPERT`, so its kernel is most likely generic too (not checked from here: run `zgrep -E 'X86_NATIVE_CPU|RCU_BOOST=' /proc/config.gz` on Frankenstein). Apply the same two changes there. (Kernels are not taken from the binhost, so `X86_NATIVE_CPU` is safe on both machines.)
+
+### ✅ Battleship: world update done, 7.2.8 running (2026-09-28, from the Battleship)
+
+* **Update:** run **without** `eix-sync` so the tree stayed on Frankenstein's (`sudo emerge -vuDN --with-bdeps=y --keep-going @world && sudo emerge --depclean`). Dry run beforehand: 474 packages, **391 binaries** from Frankenstein (incl. `gcc-16.2.1`), 83 local builds (LLVM 22 + 23 and Mesa with `abi_x86_32`, the 32-bit Steam libraries, `gentoo-kernel-7.2.8`, `ryzen_smu`).
+* **Kernel 7.2.8-5800x3dv9070xt boots.** Every line of `/etc/kernel/config.d/*.config` is present in `/proc/config.gz`, including the fixed `CONFIG_X86_NATIVE_CPU=y`, `CONFIG_RCU_EXPERT=y`, `CONFIG_RCU_BOOST=y` (delay 500) and `CONFIG_SENSORS_NCT6683=m`.
+* **Sensors:** `nct6683` loads at boot from `/etc/modules-load.d/sensors.conf` (hwmon name `nct6687`: two fans ~950–1050 RPM, board temperatures, voltages). `ryzen_smu` rebuilt for 7.2.8 and loads.
+* **GPU undervolt applies** on 7.2.8: `OD_SCLK_OFFSET -500Mhz`, `OD_VDDGFX_OFFSET -100mV`.
+* **GRUB 2.16** installed; `etc-update`: `rc.conf` and `default/grub` updates **rejected** (see section 12), hostname auto-merged.
+* **Old kernel removed:** `gentoo-kernel:6.18.50` deselected and depcleaned; its `/boot` files and `/lib/modules/6.18.50-5800x3dv9070xt` (505 MB, not owned by any package) removed by hand; `grub.cfg` now lists only 7.2.8.
+* **Installed from the binhost** (all `[binary]`, 24 packages / 68 MB, nothing compiled): kate, okular, zip, ffmpegthumbs, ffmpegthumbnailer, exfatprogs, libva-utils, nvtop, plus the three zsh extras. The package list is now section 12a.
+* **Zsh** was never configured on the Battleship (bare `battleship%` prompt, no history file, `Ctrl-X` broken); fixed, see section 12 *Zsh Shell Setup* and `home/`.
 
 ### Keeping both machines in step
 Binary packages are used only when the version matches. Sync the Gentoo tree on both machines around the same time (`emaint sync -a`) and update Frankenstein first, so its packages are ready when the Battleship updates.

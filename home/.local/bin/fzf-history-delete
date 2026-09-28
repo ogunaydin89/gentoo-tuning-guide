@@ -1,0 +1,44 @@
+#!/bin/zsh -fi
+# Delete the entries selected in fzf's Ctrl-R list from the zsh history file.
+# $1 is fzf's {+f} temp file: one item per line as "NUM<TAB>command"; extra lines
+# of multi-line commands start with a TAB (added by fzf's key-bindings.zsh).
+# Matching is on the exact command text, and zsh itself rewrites the file.
+emulate -L zsh
+setopt extendedglob
+zmodload zsh/parameter
+
+hist=${FZF_HISTFILE:-$HOME/.zsh_history}
+[[ -r $1 && -f $hist ]] || exit 0
+
+typeset -A drop
+local line cur have=0
+for line in "${(@f)$(<$1)}"; do
+  if [[ $line == (#b)[[:blank:]]#<->[*]#$'\t'(*) ]]; then
+    (( have )) && drop[$cur]=1
+    cur=$match[1] have=1
+  elif [[ $line == $'\t'* ]]; then
+    cur+=$'\n'${line#$'\t'}
+  fi
+done
+(( have )) && drop[$cur]=1
+(( ${#drop} )) || exit 0
+
+HISTSIZE=10000000 SAVEHIST=10000000
+fc -R $hist
+# $history lags one entry behind; a dummy entry makes the last real one visible.
+print -s -- __fzf_history_end__
+local -a keep
+local n total=0
+for n in ${(on)${(k)history}}; do
+  [[ ${history[$n]} == __fzf_history_end__ ]] && continue
+  (( total++ ))
+  (( ${+drop[${history[$n]}]} )) || keep+=("${history[$n]}")
+done
+(( ${#keep} < total )) || exit 0
+
+fc -p -a $hist.tmp.$$ 10000000 10000000
+for line in "${keep[@]}"; do print -s -- "$line"; done
+fc -W $hist.tmp.$$ && mv -f -- $hist.tmp.$$ $hist
+rm -f -- $hist.tmp.$$
+# Tell the interactive shell to reload its in-memory history.
+: > ${XDG_RUNTIME_DIR:-/tmp}/.zsh-history-edited-$UID
