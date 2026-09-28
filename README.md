@@ -674,6 +674,20 @@ Check first with `emerge -pv <packages>`: `[binary …]` comes from the binhost,
 
 `/etc/conf.d/display-manager`: `DISPLAYMANAGER="sddm"`, `CHECKVT=7`; `sudo rc-update add display-manager default`. SDDM's greeter runs on X11 (`DisplayServer=x11`), the Plasma session on Wayland.
 
+**ClearType-style text (subpixel RGB).** Gentoo's fontconfig default is grayscale smoothing (`10-sub-pixel-none`), which looks soft on a 1080p 24.5" screen (~90 DPI).
+
+**Do:** per user, no sudo. KDE:
+```bash
+kwriteconfig6 --file kdeglobals --group General --key XftAntialias true
+kwriteconfig6 --file kdeglobals --group General --key XftHintStyle hintslight
+kwriteconfig6 --file kdeglobals --group General --key XftSubPixel rgb
+```
+and for everything else (Chrome, GTK apps) [`~/.config/fontconfig/fonts.conf`](home/.config/fontconfig/fonts.conf): antialias on, `rgba` `rgb`, `lcdfilter` `lcddefault`, `hintstyle` `hintslight`. Log out and back in.
+
+**Why:** RGB subpixel rendering uses the red, green and blue stripes of each pixel for sharper edges, like Windows ClearType. It must match the panel: the Battleship's **Gigabyte GS25F2A** is an IPS LCD with a standard RGB stripe (model read from the EDID in `/sys/class/drm/card*-DP-*/edid`). Do not use it on OLED panels (different subpixel layouts give colour fringing). `lcddefault` keeps the fringes low; `lcdlight` is the softer alternative.
+
+**Verify:** `fc-match -v sans-serif | grep -E 'rgba|lcdfilter'` → `rgba: 1`, `lcdfilter: 1`. Enlarged, white text shows a blue tint on the left edges of letters and an orange tint on the right; grayscale shows neither.
+
 ### 5.2 PipeWire latency
 
 **Do:** [`~/.config/pipewire/pipewire.conf.d/10-latency.conf`](home/.config/pipewire/pipewire.conf.d/10-latency.conf) and the same in [`/etc/pipewire/pipewire.conf.d/`](etc/battleship/pipewire/pipewire.conf.d/10-latency.conf):
@@ -724,7 +738,7 @@ Plain Steam, no layers: no gamemode (the CPU is already on `performance`), no Ma
 
 ### 5.6 Shell (zsh)
 
-**Needs** `app-shells/zsh` `app-shells/fzf` `dev-lang/perl`, and the extras `app-shells/zsh-completions` `app-shells/gentoo-zsh-completions` `app-shells/zsh-syntax-highlighting` `app-shells/zoxide`.
+**Needs** `app-shells/zsh` `app-shells/fzf` `dev-lang/perl`, and the extras `app-shells/zsh-completions` `app-shells/gentoo-zsh-completions` `app-shells/zsh-syntax-highlighting` `app-shells/zoxide`, plus `sys-apps/eza` and `sys-apps/bat` for colour (5.8).
 
 Gentoo ships **no system-wide zshrc**. Without `~/.zshrc`, zsh shows a bare `hostname%` prompt, keeps no history file and has no completion menu; `chsh -s /bin/zsh` alone is not enough.
 
@@ -734,10 +748,25 @@ Gentoo ships **no system-wide zshrc**. Without `~/.zshrc`, zsh shows a bare `hos
 - completion menu, `~/.local/bin` in `PATH`, Home/End/Delete/Ctrl-arrow keys as Konsole sends them, Up/Down history search by prefix
 - fzf `Ctrl-R` history search with `Ctrl-X` to delete entries
 - `zoxide` (`z <part of a dir>`), the `up` alias, and syntax highlighting as the **last** line
+- colour where it helps (below)
+
+**Colour.** Everything switches colour off by itself in pipes and scripts, so nothing downstream breaks; `\ls`, `\cat` etc. always run the plain originals.
+
+| Setting | Effect |
+|---|---|
+| `eval "$(dircolors -b)"` (before the completion `list-colors` line) | `LS_COLORS` from `/etc/DIR_COLORS`. Gentoo only sets it for bash, so without this zsh's completion menu has no file-type colours |
+| `ls` → `eza --icons=auto --group-directories-first` | coloured names, file-type icons (drawn by `media-fonts/symbols-nerd-font`), folders first |
+| `ll`, `la` → `eza -l` / `-la` with `--git --time-style=long-iso` | long list with each file's git state |
+| `lt` → `eza --tree --level=2` | tree view |
+| `cat` → `bat --paging=never --style=plain` | syntax highlighting; in a pipe the output is byte-identical to plain `cat` |
+| `grep`, `diff` `--color=auto`, `ip -color=auto` | coloured matches, diffs, network output |
+| `FZF_CTRL_T_OPTS` with a `bat` preview | Ctrl-T file picker shows the file highlighted (or a folder tree) |
+
+Man pages are already coloured by Gentoo's `app-text/manpager`.
 
 **Ctrl-X delete, how it works:** fzf's `{+f}` passes the path of a temp file with the selected lines (`NUM<TAB>command`, continuation lines start with a TAB). `fzf-history-delete` is a `zsh -fi` script: zsh itself reads `~/.zsh_history`, drops the entries whose text matches exactly and writes the file back, which handles multi-line commands, non-ASCII text and special characters. It needs `-i` (a non-interactive zsh writes no history) and adds a dummy entry because `$history` lags one entry behind. `exclude-multi` removes the entries from the open list; after closing, the shell reloads its in-memory history.
 
-**Verify:** a new Konsole tab shows the prompt; `~/.zsh_history` grows; Ctrl-R, select, Ctrl-X removes the entry from the file.
+**Verify:** a new Konsole tab shows the prompt; `~/.zsh_history` grows; Ctrl-R, select, Ctrl-X removes the entry from the file; `echo ${#LS_COLORS}` is not 0; `cat file | md5sum` equals `\cat file | md5sum`.
 
 ### 5.7 Fonts
 
@@ -798,6 +827,8 @@ After a reboot, every line should give the expected result.
 | Logs | `sudo ls /var/log/everything/current` | exists |
 | Console | Ctrl+Alt+F3, then Ctrl+Alt+F7 | sharp Terminus text login, back to Plasma |
 | Vulkan | `vulkaninfo --summary \| grep driverName` | `radv` |
+| Text rendering | `fc-match -v sans-serif \| grep rgba` | `rgba: 1` (RGB) |
+| Shell colour | `echo ${#LS_COLORS}` | not `0` |
 | Portage | `emerge -pvuDN --with-bdeps=y @world` | `Total: 0 packages` |
 | Portage | `emerge -p --depclean` | `Number to remove: 0` |
 | Security | `glsa-check -t all` | nothing |
