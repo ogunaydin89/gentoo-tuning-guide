@@ -1,0 +1,4 @@
+GRUB_DISTRIBUTOR="Gentoo"
+GRUB_TIMEOUT=3
+GRUB_DISABLE_OS_PROBER=false
+GRUB_CMDLINE_LINUX_DEFAULT="amd_pstate=active quiet amdgpu.dcdebugmask=0x10 amdgpu.gpu_recovery=1 amdgpu.ppfeaturemask=0xffffffff"

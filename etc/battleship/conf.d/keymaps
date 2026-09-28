@@ -1,0 +1,15 @@
+# Console (TTY) keyboard layout. KDE/SDDM use their own keyboard settings.
+# Layouts: /usr/share/keymaps/i386/*/  (trq = Turkish Q)
+keymap="trq"
+
+# Enable Windows keys (Win, Menu)
+windowkeys="YES"
+
+# Extra keymaps to load after the main one
+extended_keymaps=""
+
+# Charset passed to dumpkeys (empty = default)
+dumpkeys_charset=""
+
+# Replace the currency sign with the Euro sign
+fix_euro="NO"
