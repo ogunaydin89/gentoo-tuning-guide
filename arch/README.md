@@ -123,19 +123,20 @@ labwc's default `Super+Return` launches `lab-sensible-terminal`, which picks the
 
 ## Part 3 – Kernel and boot
 
-The default Arch kernel (`linux`) is used with no custom config: no 1000 Hz tick patches and no fragments. Arch's kernel is a generic desktop kernel; the latency tuning of the Gentoo setup is not carried over.
+The default Arch kernel (`linux`) ships natively with `CONFIG_HZ=1000` and `CONFIG_NO_HZ_FULL=y`, providing 1 ms scheduling latency out of the box.
 
 ### 3.1 Kernel command line
 
 **Do:** add to the kernel parameters:
 ```text
-amd_pstate=active amdgpu.dcdebugmask=0x10 amdgpu.gpu_recovery=1 amdgpu.ppfeaturemask=0xffffffff
+amd_pstate=active amdgpu.dcdebugmask=0x10 amdgpu.gpu_recovery=1 amdgpu.ppfeaturemask=0xffffffff transparent_hugepage=madvise
 ```
 **Why** (all measured on this GPU under Gentoo):
 - `amd_pstate=active`: the CPU's own frequency control (EPP mode).
 - `amdgpu.dcdebugmask=0x10`: fixes desktop freezes on high-refresh monitors (the display engine's power saving cannot ramp up in time for the next frame; symptoms were `flip_done timed out` in `dmesg`).
 - `amdgpu.gpu_recovery=1`: reset the GPU instead of hanging when it locks up.
 - `amdgpu.ppfeaturemask=0xffffffff`: makes OverDrive (the undervolt, Part 4.4) writable.
+- `transparent_hugepage=madvise`: huge pages only where programs ask for them, preventing memory compaction stalls and micro-stutter in games.
 
 This machine uses **systemd-boot with a Unified Kernel Image (UKI)** (`/boot/EFI/Linux/arch-linux.efi`):
 1. Append the parameters to `/etc/kernel/cmdline`.
@@ -158,7 +159,9 @@ sudo install -Dm644 etc/systemd/user.conf.d/limits.conf /etc/systemd/user.conf.d
 sudo install -Dm644 etc/systemd/zram-generator.conf /etc/systemd/zram-generator.conf
 sudo install -Dm755 usr/local/bin/amdgpu-undervolt.sh /usr/local/bin/amdgpu-undervolt.sh
 sudo install -Dm644 etc/systemd/system/amdgpu-undervolt.service /etc/systemd/system/amdgpu-undervolt.service
-sudo sysctl --system && sudo systemctl daemon-reload && sudo systemctl enable --now amdgpu-undervolt.service
+sudo install -Dm644 etc/tmpfiles.d/cpu-epp.conf /etc/tmpfiles.d/cpu-epp.conf
+sudo install -Dm644 etc/tmpfiles.d/thp.conf /etc/tmpfiles.d/thp.conf
+sudo sysctl --system && sudo systemctl daemon-reload && sudo systemd-tmpfiles --create && sudo systemctl enable --now amdgpu-undervolt.service
 ```
 - **`install -Dm644 src dest`** copies the file, creates missing parent folders (`-D`) and sets the mode (`-m644` for configs, `-m755` for the script).
 - **Desktop files** (labwc autostart and environment, portals, PipeWire) are user files: copy `home/.config/…` into `~/.config/…`.
@@ -232,12 +235,14 @@ The best cores get the mildest offset: they boost highest and become unstable fi
 
 | Check | Command | Expected / Verified |
 |---|---|---|
-| Kernel line | `cat /proc/cmdline` | `amd_pstate=active … amdgpu.ppfeaturemask=0xffffffff` (verified) |
+| Kernel line | `cat /proc/cmdline` | `amd_pstate=active … transparent_hugepage=madvise` (verified) |
 | GPU driver | `vulkaninfo --summary \| grep driverName` | `driverName = radv` (verified) |
 | Undervolt | `cat /sys/class/drm/card*/device/pp_od_clk_voltage` | `OD_SCLK_OFFSET: -500Mhz`, `OD_VDDGFX_OFFSET: -100mV` (verified) |
 | Power profile | `cat /sys/class/drm/card*/device/pp_power_profile_mode` | `1 3D_FULL_SCREEN*` (verified) |
 | Swap | `swapon --show` | `/dev/zram0 partition 31.3G (lz4, prio 100)` (verified) |
 | Sysctls | `sysctl vm.swappiness kernel.split_lock_mitigate` | `10`, `0` (verified) |
+| THP mode | `cat /sys/kernel/mm/transparent_hugepage/enabled` | `always [madvise] never` (verified) |
+| CPU EPP | `cat /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference` | `performance` (verified) |
 | File limit | `ulimit -n` | `524288` (verified) |
 | NTSYNC | `ls -l /dev/ntsync` | `/dev/ntsync` (verified) |
 | PipeWire latency | `pw-metadata -n settings 0` | `clock.quantum = 64` (verified) |
@@ -255,7 +260,7 @@ The best cores get the mildest offset: they boost highest and become unstable fi
 - **Cache:** `sudo paccache -d` lists old cached packages that can be removed (`pacman-contrib`).
 - **Orphans:** `pacman -Qdtq` lists packages nothing needs; review before removing.
 - **Mirrors:** run the `reflector` command from Part 1.1 when downloads get slow.
-- **AUR:** nothing in this setup needs it for now. A helper such as `paru` would only be needed for something like `ryzen_smu` (CPU monitoring), and AUR recipes should be read before building.
+- **AUR:** forbidden by system policy. Only official distribution repositories (`core`, `extra`, `multilib`) are used; no AUR helpers or packages.
 
 ---
 
