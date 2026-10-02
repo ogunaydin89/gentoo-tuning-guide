@@ -1,0 +1,7 @@
+# /etc/fstab: static file system information.
+# <fs>                                 <mountpoint>      <type>    <opts>                                   <dump/pass>
+UUID=<root-uuid>  /                 ext4      noatime,discard                          0 1
+UUID=<esp-uuid>                             /efi              vfat      umask=0077,noatime                       0 2
+UUID=<swap-uuid>  none              swap      sw,pri=1                                 0 0
+# 24 GB Tmpfs for lightning fast Portage builds (Backed by 16GB RAM + 16GB LZ4 zRAM + 16GB NVMe Swap)
+tmpfs                                      /var/tmp/portage  tmpfs     size=24G,uid=portage,gid=portage,mode=775,noatime 0 0

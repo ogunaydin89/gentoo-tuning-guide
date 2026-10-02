@@ -1,0 +1,6 @@
+# Only the settings changed from the package default
+keymap="trq"
+windowkeys="YES"
+extended_keymaps=""
+dumpkeys_charset=""
+fix_euro="NO"

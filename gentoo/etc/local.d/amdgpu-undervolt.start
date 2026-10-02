@@ -1,0 +1,19 @@
+#!/bin/bash
+# Gentoo OpenRC - AMD Radeon RX 6650 XT Persistent Golden Undervolt
+# Robust retry loop: wait up to 20 seconds for the GPU driver to initialize
+
+for i in {1..20}; do
+    for card in /sys/class/drm/card*/device/pp_od_clk_voltage; do
+        if [ -w "$card" ]; then
+            echo "vo -85" > "$card"
+            echo "s 1 2550" > "$card"
+            echo "c" > "$card"
+            echo "[$(date)] Successfully applied -85mV undervolt to $card" >> /var/log/amdgpu-undervolt.log
+            exit 0
+        fi
+    done
+    sleep 1
+done
+
+echo "[$(date)] Timed out waiting for amdgpu pp_od_clk_voltage node" >> /var/log/amdgpu-undervolt.log
+exit 1

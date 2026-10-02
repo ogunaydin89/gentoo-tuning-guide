@@ -1,0 +1,2 @@
+# Only the settings changed from the package default
+DISPLAYMANAGER="sddm"

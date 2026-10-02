@@ -69,7 +69,7 @@ _fzf_history_wrapper() {
 zle -N fzf-history-widget _fzf_history_wrapper
 
 
-# Gentoo full system update (see gentoo-tuning-guide section 12)
+# Gentoo full system update (see tuning-guide/gentoo, Part 7.1)
 alias up='sudo zsh -c "eix-sync && emerge -vuDN --with-bdeps=y --keep-going @world && emerge --depclean"'
 
 # zoxide: `z <part of dir>` jumps to frequently used directories
