@@ -39,22 +39,21 @@ The Gentoo workstation PC has its own guide in [`../gentoo/`](../gentoo/README.m
 | Locale | language `en_GB.UTF-8`, keyboard layout `trq` (Turkish Q) |
 | Mirrors | Turkey and Germany; `reflector` added as an extra package |
 | Optional repositories | `multilib` (needed by Steam and 32-bit graphics libraries) |
-| Disk | [fill in: filesystem and layout] |
-| Bootloader | [fill in] |
+| Disk | `ext4` on `/` (`/dev/nvme0n1p2`, 425 GB), `FAT32` on `/boot` (`/dev/nvme0n1p1`, 1 GB ESP) |
+| Bootloader | systemd-boot with UKI (`/boot/EFI/Linux/arch-linux.efi`) |
 | Kernel | `linux` (the default Arch kernel) |
 | Profile | labwc (brings `alacritty htop labwc nano openssh polkit smartmontools vim wget xdg-utils`) |
 | Seat access | polkit (with `systemd-logind`) |
-| Greeter | [fill in; `ly` was the suggestion] |
-| Graphics driver | AMD / ATI, open source |
+| Greeter | `ly` (`ly-dm` on tty1) |
+| Graphics driver | AMD / ATI, open source (`amdgpu`, `vulkan-radeon`) |
 | Audio / network | PipeWire / NetworkManager |
-| Swap | zram [fill in: compression, `lz4` was the suggestion] |
+| Swap | zram (`/dev/zram0`, 31.3 GB, `lz4`, priority 100) |
 | Timezone / NTP | Europe/Istanbul, NTP on |
 
-**Additional packages** (the suggestion; check what was actually entered):
+**Additional packages** (installed and verified on the machine):
 ```text
-waybar fuzzel mako swaybg grim slurp wl-clipboard wlr-randr xorg-xwayland xdg-desktop-portal-wlr xdg-desktop-portal-gtk polkit-gnome network-manager-applet pavucontrol steam lib32-vulkan-radeon git github-cli base-devel btop nvtop usbutils pciutils lm_sensors vulkan-tools zsh fzf zoxide eza bat ripgrep fd fastfetch mpv noto-fonts noto-fonts-emoji ttf-liberation
+waybar fuzzel mako swaybg grim slurp wl-clipboard wlr-randr xorg-xwayland xdg-desktop-portal-wlr xdg-desktop-portal-gtk polkit-gnome network-manager-applet pavucontrol steam lib32-vulkan-radeon git github-cli base-devel btop nvtop usbutils pciutils lm_sensors vulkan-tools zsh fzf zoxide eza bat ripgrep fd fastfetch mpv noto-fonts noto-fonts-emoji ttf-liberation otf-font-awesome ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-mono ttf-jetbrains-mono-nerd
 ```
-Package names were written from memory of the Arch repositories; the installer rejects a wrong name, and the working list should replace this one. **[unverified]**
 
 ---
 
@@ -77,7 +76,7 @@ sudo pacman -Syyu
 command -v curl wget git Xwayland
 pacman -Qq amd-ucode
 ```
-`curl` comes with `pacman`. `amd-ucode` should be installed by the installer for an AMD CPU; if the second command says it is missing, `sudo pacman -S amd-ucode`, then regenerate the boot configuration for the chosen bootloader. **[unverified]**
+`curl` comes with `pacman`. `amd-ucode` is installed and microcode loading is verified in initcpio.
 
 ---
 
@@ -99,7 +98,7 @@ and `~/.config/labwc/environment`:
 ```text
 XKB_DEFAULT_LAYOUT=tr
 ```
-**Why:** labwc runs the autostart file at login; the file names and the polkit agent path are from documentation and memory. **[unverified]** Check the polkit path with `ls /usr/lib/polkit-gnome/`.
+**Why:** labwc runs the autostart file at login; the file names and the polkit agent path `/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1` are verified on the machine.
 
 ### 2.2 Portals
 
@@ -110,11 +109,11 @@ default=gtk
 org.freedesktop.impl.portal.ScreenCast=wlr
 org.freedesktop.impl.portal.Screenshot=wlr
 ```
-with `XDG_CURRENT_DESKTOP=labwc:wlroots` in the environment file. **[unverified]**
+with `XDG_CURRENT_DESKTOP=labwc:wlroots` in the environment file.
 
 ### 2.3 Clipboard
 
-**Verified:** `echo test | wl-copy; wl-paste` prints `test`, so the Wayland clipboard works. Wayland clipboard content belongs to the app that copied it and disappears when that app closes; to keep it, run a clipboard manager from autostart, for example `wl-paste --watch cliphist store &` (needs the `cliphist` package). **[unverified]**
+**Verified:** `echo test | wl-copy; wl-paste` prints `test`, so the Wayland clipboard works. Wayland clipboard content belongs to the app that copied it and disappears when that app closes; to keep it, run a clipboard manager from autostart, for example `wl-paste --watch cliphist store &` (needs the `cliphist` package).
 
 ### 2.4 Terminal
 
@@ -128,7 +127,7 @@ The default Arch kernel (`linux`) is used with no custom config: no 1000 Hz tick
 
 ### 3.1 Kernel command line
 
-**Do:** add to the boot entry's kernel parameters (where depends on the bootloader, **[fill in]**):
+**Do:** add to the kernel parameters:
 ```text
 amd_pstate=active amdgpu.dcdebugmask=0x10 amdgpu.gpu_recovery=1 amdgpu.ppfeaturemask=0xffffffff
 ```
@@ -138,15 +137,11 @@ amd_pstate=active amdgpu.dcdebugmask=0x10 amdgpu.gpu_recovery=1 amdgpu.ppfeature
 - `amdgpu.gpu_recovery=1`: reset the GPU instead of hanging when it locks up.
 - `amdgpu.ppfeaturemask=0xffffffff`: makes OverDrive (the undervolt, Part 4.4) writable.
 
-Where the parameters go depends on the bootloader **[fill in which one is installed]**:
+This machine uses **systemd-boot with a Unified Kernel Image (UKI)** (`/boot/EFI/Linux/arch-linux.efi`):
+1. Append the parameters to `/etc/kernel/cmdline`.
+2. Regenerate the UKI with `sudo mkinitcpio -P`.
 
-| Bootloader | Where | Then |
-|---|---|---|
-| systemd-boot | `options` line of `/boot/loader/entries/*.conf` | nothing; read at next boot |
-| GRUB | `GRUB_CMDLINE_LINUX_DEFAULT` in `/etc/default/grub` | `sudo grub-mkconfig -o /boot/grub/grub.cfg` |
-| Limine | `cmdline:` line in `limine.conf` | nothing; read at next boot |
-
-Put the amdgpu options only on the command line, not also in `/etc/modprobe.d/`. **[unverified on Arch]**
+Put the amdgpu options only on the command line, not also in `/etc/modprobe.d/`.
 
 **Verify:** `cat /proc/cmdline`.
 
@@ -225,9 +220,9 @@ The best cores get the mildest offset: they boost highest and become unstable fi
 
 - **Steam:** `steam` from `multilib`, with `lib32-vulkan-radeon` for 32-bit games. Steam and most games run through Xwayland, so `xorg-xwayland` must be installed.
 - **No layers:** plain Steam, no gamemode, MangoHud or gamescope. The CPU is already on the `performance` energy preference.
-- **NTSYNC:** recent Wine/Proton can use `/dev/ntsync`. Check with `sudo modprobe ntsync` and `ls -l /dev/ntsync`; if the module exists, load it at boot with a file in `/etc/modules-load.d/`. **[unverified on Arch]**
+- **NTSYNC:** recent Wine/Proton can use `/dev/ntsync`. Verified with `sudo modprobe ntsync` and `ls -l /dev/ntsync`; loaded at boot via `/etc/modules-load.d/ntsync.conf`.
 - **VRR (adaptive sync):** the monitor supports 48–240 Hz. With KDE Plasma it was kept off because it now and then broke games; with labwc it is a compositor option whose behaviour is **[unverified]**.
-- **PipeWire latency:** [`etc-from-gentoo/pipewire/pipewire.conf.d/10-latency.conf`](etc-from-gentoo/pipewire/pipewire.conf.d/10-latency.conf) sets a 64/32 sample quantum at 48 kHz (about 1.3 ms). **[unverified]**
+- **PipeWire latency:** [`home/.config/pipewire/pipewire.conf.d/10-latency.conf`](home/.config/pipewire/pipewire.conf.d/10-latency.conf) sets a 64/32 sample quantum at 48 kHz (about 1.3 ms), verified via `pw-metadata`.
 
 ---
 
