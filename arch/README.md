@@ -260,7 +260,7 @@ The best cores get the mildest offset: they boost highest and become unstable fi
 - **Cache:** `sudo paccache -d` lists old cached packages that can be removed (`pacman-contrib`).
 - **Orphans:** `pacman -Qdtq` lists packages nothing needs; review before removing.
 - **Mirrors:** run the `reflector` command from Part 1.1 when downloads get slow.
-- **AUR:** forbidden by system policy. Only official distribution repositories (`core`, `extra`, `multilib`) are used; no AUR helpers or packages.
+- **AUR and other third-party sources:** avoided. Official repositories (`core`, `extra`, `multilib`) only, unless there is no other way; in that case read the PKGBUILD first and tell the user. No Flatpak or Snap either.
 
 ---
 
@@ -271,7 +271,7 @@ The best cores get the mildest offset: they boost highest and become unstable fi
 - **labwc instead of KDE Plasma.** A minimal, fast compositor for a machine that only runs games; the cost is assembling the desktop (Part 2) by hand.
 - **polkit instead of `seatd`.** On a systemd system `systemd-logind` already provides seats and sessions; polkit adds the permission prompts for mounting drives, network changes and power actions.
 - **No browser on this PC.** Browsing happens on the workstation PC, and Steam has its own web view. If one is ever needed, `firefox` or `chromium` come from the official repositories.
-- **No AUR helper for now.** Nothing here needs the AUR. `paru` would be installed only for something like `ryzen_smu`, after reading its PKGBUILD.
+- **Official repositories only, where possible.** Nothing in this setup needs the AUR, Flatpak or Snap. A third-party source would be used only when there is no other way, after the user agrees and the build recipe has been read.
 - **No hugepages and no MSR tweaks.** The gain was measured at about 3 % on the workstation PC and the risk of a broken desktop is not worth it. This applies to mining as well as to the kernel.
 - **zram with `lz4`.** The CPU-cheapest algorithm; with 32 GB of RAM zram is rarely full, so low CPU cost matters more than compression ratio.
 - **Terminal:** Alacritty comes with the labwc profile and is what `Super+Return` opens.
