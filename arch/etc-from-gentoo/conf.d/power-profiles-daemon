@@ -1,6 +1,0 @@
-# Supervise power-profiles-daemon and restart it if it dies.
-# Kept here instead of editing /etc/init.d/power-profiles-daemon, so package updates don't undo it.
-supervisor="supervise-daemon"
-respawn_delay=2
-respawn_max=0
-rc_need="dbus"

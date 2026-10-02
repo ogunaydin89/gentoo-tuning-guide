@@ -1,3 +1,0 @@
-#!/bin/sh
-# Weekly TRIM for all mounted filesystems that support it (NVMe SSD)
-exec /sbin/fstrim -a
