@@ -2,7 +2,7 @@
 
 A step-by-step guide to the Arch Linux setup on the gaming PC (Ryzen 7 5800X3D, Radeon RX 9070 XT): the default Arch kernel, the labwc Wayland compositor, Steam, and the tuning carried over from the Gentoo setup this machine used to run.
 
-> **Status: first draft, written during the install.** Steps marked **[unverified]** were written from documentation and from the old Gentoo setup of this machine, and have **not** been run on this Arch install. Items marked **[fill in]** are choices made in the installer that this draft does not know yet. Whoever runs a step (the user or an assistant on the machine) should report the result, and the mark is removed only then.
+> **Status: first draft, written during the install.** Ready-to-copy template files are in [`etc/`](etc/), [`home/`](home/) and [`usr/`](usr/); each starts with an **UNVERIFIED** header line that is removed once its verify step passes. Steps marked **[unverified]** were written from documentation and from the old Gentoo setup of this machine, and have **not** been run on this Arch install. Items marked **[fill in]** are choices made in the installer that this draft does not know yet. Whoever runs a step (the user or an assistant on the machine) should report the result, and the mark is removed only then.
 
 The Gentoo workstation PC has its own guide in [`../gentoo/`](../gentoo/README.md). The reference files from this machine's old Gentoo install are kept in [`etc-from-gentoo/`](etc-from-gentoo/) as raw material (values, scripts, measured numbers); they are Gentoo/OpenRC files and must be translated, not copied.
 
@@ -16,6 +16,7 @@ The Gentoo workstation PC has its own guide in [`../gentoo/`](../gentoo/README.m
 - [Part 5 – Gaming](#part-5--gaming)
 - [Part 6 – Verification](#part-6--verification)
 - [Part 7 – Maintenance](#part-7--maintenance)
+- [Decisions and why](#decisions-and-why)
 - [Appendix – Known quirks](#appendix--known-quirks)
 
 ---
@@ -137,6 +138,14 @@ amd_pstate=active amdgpu.dcdebugmask=0x10 amdgpu.gpu_recovery=1 amdgpu.ppfeature
 - `amdgpu.gpu_recovery=1`: reset the GPU instead of hanging when it locks up.
 - `amdgpu.ppfeaturemask=0xffffffff`: makes OverDrive (the undervolt, Part 4.4) writable.
 
+Where the parameters go depends on the bootloader **[fill in which one is installed]**:
+
+| Bootloader | Where | Then |
+|---|---|---|
+| systemd-boot | `options` line of `/boot/loader/entries/*.conf` | nothing; read at next boot |
+| GRUB | `GRUB_CMDLINE_LINUX_DEFAULT` in `/etc/default/grub` | `sudo grub-mkconfig -o /boot/grub/grub.cfg` |
+| Limine | `cmdline:` line in `limine.conf` | nothing; read at next boot |
+
 Put the amdgpu options only on the command line, not also in `/etc/modprobe.d/`. **[unverified on Arch]**
 
 **Verify:** `cat /proc/cmdline`.
@@ -145,11 +154,27 @@ Put the amdgpu options only on the command line, not also in `/etc/modprobe.d/`.
 
 ## Part 4 – System tuning
 
-All values below come from the old Gentoo setup of this machine ([`etc-from-gentoo/`](etc-from-gentoo/)). The commands to apply them on Arch (systemd) are written from documentation. **[unverified]**
+All values below come from the old Gentoo setup of this machine ([`etc-from-gentoo/`](etc-from-gentoo/), kept as raw material). The ready-to-copy Arch (systemd) versions are the template files in this folder; each one starts with an UNVERIFIED header and an "Install to …" line. From the repository folder `arch/`:
+```bash
+sudo install -Dm644 etc/sysctl.d/99-performance.conf /etc/sysctl.d/99-performance.conf
+sudo install -Dm644 etc/sysctl.d/99-disable-ipv6.conf /etc/sysctl.d/99-disable-ipv6.conf
+sudo install -Dm644 etc/systemd/system.conf.d/limits.conf /etc/systemd/system.conf.d/limits.conf
+sudo install -Dm644 etc/systemd/user.conf.d/limits.conf /etc/systemd/user.conf.d/limits.conf
+sudo install -Dm644 etc/systemd/zram-generator.conf /etc/systemd/zram-generator.conf
+sudo install -Dm755 usr/local/bin/amdgpu-undervolt.sh /usr/local/bin/amdgpu-undervolt.sh
+sudo install -Dm644 etc/systemd/system/amdgpu-undervolt.service /etc/systemd/system/amdgpu-undervolt.service
+sudo sysctl --system && sudo systemctl daemon-reload && sudo systemctl enable --now amdgpu-undervolt.service
+```
+- **`install -Dm644 src dest`** copies the file, creates missing parent folders (`-D`) and sets the mode (`-m644` for configs, `-m755` for the script).
+- **Desktop files** (labwc autostart and environment, portals, PipeWire) are user files: copy `home/.config/…` into `~/.config/…`.
+- **`zram-generator`:** the installer's zram option may already have written `/etc/systemd/zram-generator.conf`; keep one file only.
+- **`ntsync.conf`:** install it only if `sudo modprobe ntsync` works and `/dev/ntsync` appears.
+
+All of these are **[unverified]** until their verify step in Part 6 passes.
 
 ### 4.1 Sysctls
 
-Copy the values from [`etc-from-gentoo/sysctl.d/99-performance.conf`](etc-from-gentoo/sysctl.d/99-performance.conf) to `/etc/sysctl.d/99-performance.conf`: low swappiness for zram, `vm.max_map_count = 2147483642` (some Proton games need it), larger network buffers with BBR, `kernel.split_lock_mitigate = 0` (stops the kernel from slowing programs that do split-lock accesses, which some Unity and older games do constantly) and `vm.compaction_proactiveness = 0`. Apply with `sudo sysctl --system`.
+Copy the values from [`etc/sysctl.d/99-performance.conf`](etc/sysctl.d/99-performance.conf) to `/etc/sysctl.d/99-performance.conf`: low swappiness for zram, `vm.max_map_count = 2147483642` (some Proton games need it), larger network buffers with BBR, `kernel.split_lock_mitigate = 0` (stops the kernel from slowing programs that do split-lock accesses, which some Unity and older games do constantly) and `vm.compaction_proactiveness = 0`. Apply with `sudo sysctl --system`.
 
 ### 4.2 Open-file limit
 
@@ -162,7 +187,7 @@ Verify after re-login with `ulimit -n`.
 
 ### 4.3 IPv6, TRIM, time
 
-- **IPv6 off:** the ISP's IPv6 path black-holes large packets (long streaming connections die mid-response). Use [`etc-from-gentoo/sysctl.d/99-disable-ipv6.conf`](etc-from-gentoo/sysctl.d/99-disable-ipv6.conf) and `nmcli con mod "<connection>" ipv6.method disabled`.
+- **IPv6 off:** the ISP's IPv6 path black-holes large packets (long streaming connections die mid-response). Use [`etc/sysctl.d/99-disable-ipv6.conf`](etc/sysctl.d/99-disable-ipv6.conf) and `nmcli con mod "<connection>" ipv6.method disabled`.
 - **TRIM:** `sudo systemctl enable --now fstrim.timer`.
 - **Time:** the installer's NTP setting enables systemd's time sync; check with `timedatectl`.
 
@@ -229,6 +254,20 @@ The best cores get the mildest offset: they boost highest and become unstable fi
 - **Orphans:** `pacman -Qdtq` lists packages nothing needs; review before removing.
 - **Mirrors:** run the `reflector` command from Part 1.1 when downloads get slow.
 - **AUR:** nothing in this setup needs it for now. A helper such as `paru` would only be needed for something like `ryzen_smu` (CPU monitoring), and AUR recipes should be read before building.
+
+---
+
+## Decisions and why
+
+- **Arch instead of Gentoo on this PC.** A gaming machine mostly wants fresh drivers (the RX 9070 XT needs a recent kernel and Mesa) and quick updates, not a multi-hour compile after every update. Gentoo stays on the workstation PC, where compile control pays off.
+- **The default `linux` kernel.** No custom config, no per-machine kernel to maintain. The Gentoo kernel's latency tuning (1000 Hz tick, full preemption) is deliberately not carried over.
+- **labwc instead of KDE Plasma.** A minimal, fast compositor for a machine that only runs games; the cost is assembling the desktop (Part 2) by hand.
+- **polkit instead of `seatd`.** On a systemd system `systemd-logind` already provides seats and sessions; polkit adds the permission prompts for mounting drives, network changes and power actions.
+- **No browser on this PC.** Browsing happens on the workstation PC, and Steam has its own web view. If one is ever needed, `firefox` or `chromium` come from the official repositories.
+- **No AUR helper for now.** Nothing here needs the AUR. `paru` would be installed only for something like `ryzen_smu`, after reading its PKGBUILD.
+- **No hugepages and no MSR tweaks.** The gain was measured at about 3 % on the workstation PC and the risk of a broken desktop is not worth it. This applies to mining as well as to the kernel.
+- **zram with `lz4`.** The CPU-cheapest algorithm; with 32 GB of RAM zram is rarely full, so low CPU cost matters more than compression ratio.
+- **Terminal:** Alacritty comes with the labwc profile and is what `Super+Return` opens.
 
 ---
 

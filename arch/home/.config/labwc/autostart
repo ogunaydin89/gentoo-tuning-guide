@@ -1,0 +1,8 @@
+# UNVERIFIED on Arch: not yet run on the gaming PC. Remove this line once the README's verify step passes.
+# Install to ~/.config/labwc/autostart. Package names and the polkit agent path
+# come from documentation: check them with 'ls /usr/lib/polkit-gnome/'.
+swaybg -c '#1e1e2e' >/dev/null 2>&1 &
+waybar >/dev/null 2>&1 &
+mako >/dev/null 2>&1 &
+nm-applet --indicator >/dev/null 2>&1 &
+/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 >/dev/null 2>&1 &

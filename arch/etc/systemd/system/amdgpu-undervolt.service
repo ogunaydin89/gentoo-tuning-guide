@@ -1,0 +1,14 @@
+# UNVERIFIED on Arch: not yet run on the gaming PC. Remove this line once the README's verify step passes.
+# Install to /etc/systemd/system/amdgpu-undervolt.service, then:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now amdgpu-undervolt.service
+[Unit]
+Description=Undervolt the RX 9070 XT (RDNA 4 offsets)
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/amdgpu-undervolt.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
