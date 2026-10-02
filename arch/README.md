@@ -52,7 +52,7 @@ The Gentoo workstation PC has its own guide in [`../gentoo/`](../gentoo/README.m
 
 **Additional packages** (installed and verified on the machine):
 ```text
-waybar fuzzel mako swaybg grim slurp wl-clipboard wlr-randr xorg-xwayland xdg-desktop-portal-wlr xdg-desktop-portal-gtk polkit-gnome network-manager-applet pavucontrol steam lib32-vulkan-radeon git github-cli base-devel btop nvtop usbutils pciutils lm_sensors vulkan-tools zsh fzf zoxide eza bat ripgrep fd fastfetch mpv noto-fonts noto-fonts-emoji ttf-liberation otf-font-awesome ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-mono ttf-jetbrains-mono-nerd
+waybar fuzzel mako swaybg grim slurp wl-clipboard wlr-randr xorg-xwayland xdg-desktop-portal-wlr xdg-desktop-portal-gtk polkit-gnome network-manager-applet pavucontrol rtkit steam lib32-vulkan-radeon git github-cli base-devel btop nvtop usbutils pciutils lm_sensors vulkan-tools zsh fzf zoxide eza bat ripgrep fd fastfetch mpv noto-fonts noto-fonts-emoji ttf-liberation otf-font-awesome ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-mono ttf-jetbrains-mono-nerd
 ```
 
 ---
@@ -183,6 +183,7 @@ Verify after re-login with `ulimit -n`.
 ### 4.3 IPv6, TRIM, time
 
 - **IPv6 off:** the ISP's IPv6 path black-holes large packets (long streaming connections die mid-response). Use [`etc/sysctl.d/99-disable-ipv6.conf`](etc/sysctl.d/99-disable-ipv6.conf) and `nmcli con mod "<connection>" ipv6.method disabled`.
+- **Filesystem (noatime):** root NVMe partition mounted with `noatime` in [`etc/fstab`](etc/fstab) to avoid metadata write cycles on game asset reads.
 - **TRIM:** `sudo systemctl enable --now fstrim.timer`.
 - **Time:** the installer's NTP setting enables systemd's time sync; check with `timedatectl`.
 
@@ -223,6 +224,7 @@ The best cores get the mildest offset: they boost highest and become unstable fi
 - **NTSYNC:** recent Wine/Proton can use `/dev/ntsync`. Verified with `sudo modprobe ntsync` and `ls -l /dev/ntsync`; loaded at boot via `/etc/modules-load.d/ntsync.conf`.
 - **VRR (adaptive sync):** the monitor supports 48–240 Hz. With KDE Plasma it was kept off because it now and then broke games; with labwc it is a compositor option whose behaviour is **[unverified]**.
 - **PipeWire latency:** [`home/.config/pipewire/pipewire.conf.d/10-latency.conf`](home/.config/pipewire/pipewire.conf.d/10-latency.conf) sets a 64/32 sample quantum at 48 kHz (about 1.3 ms), verified via `pw-metadata`.
+- **Audio scheduling:** `rtkit` (RealtimeKit) daemon enabled for PipeWire / WirePlumber to guarantee realtime priority without dropouts under gaming load.
 
 ---
 
@@ -239,6 +241,8 @@ The best cores get the mildest offset: they boost highest and become unstable fi
 | File limit | `ulimit -n` | `524288` (verified) |
 | NTSYNC | `ls -l /dev/ntsync` | `/dev/ntsync` (verified) |
 | PipeWire latency | `pw-metadata -n settings 0` | `clock.quantum = 64` (verified) |
+| RTKit daemon | `systemctl is-active rtkit-daemon` | `active` (verified) |
+| Filesystem mount | `findmnt -no OPTIONS /` | `rw,noatime` (verified) |
 | Clipboard | `echo test \| wl-copy; wl-paste` | `test` (verified) |
 | Updates | `sudo pacman -Syu` | `there is nothing to do` (verified) |
 
