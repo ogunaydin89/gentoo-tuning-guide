@@ -1,0 +1,3 @@
+# Only the settings changed from the package default
+CFGFILE="/etc/chrony/chrony.conf"
+ARGS="-4 -u ntp -F 2"

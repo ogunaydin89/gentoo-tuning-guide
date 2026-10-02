@@ -4,7 +4,7 @@ A step-by-step guide to the Gentoo setup on the workstation PC (Ryzen 7 5700X, R
 
 The gaming PC runs Arch Linux and has its own guide in [`../arch/`](../arch/).
 
-> **Status.** The guide describes the target state of this PC. These items are written up but **not yet applied to the live machine**: the kernel on Gentoo's default config without `savedconfig` (Part 3.1, with THP `madvise`), `chrony` and `metalog` in the default runlevel (4.6, 4.7), `usbutils`, removing `netmount` and the retired binhost service (`lighttpd`) from the runlevels, and the `buildpkg`/signing lines in `make.conf` (already removed from the reference file, still present live). Everything else matches the live system.
+> **Status.** The guide describes the target state of this PC. These items are written up but **not yet applied to the live machine**: the kernel on Gentoo's default config without `savedconfig` (Part 3.1, with THP `madvise`), removing `netmount` and the retired binhost service (`lighttpd`) from the runlevels, and the `buildpkg`/signing lines in `make.conf` (already removed from the reference file, still present live). Everything else matches the live system.
 
 ## Contents
 
@@ -430,7 +430,7 @@ Runlevels ([`etc/runlevels.txt`](etc/runlevels.txt)):
 sudo emerge net-misc/chrony
 sudo rc-update add chronyd default && sudo rc-service chronyd start
 ```
-In `/etc/conf.d/chronyd`: `ARGS="-4 -u ntp -F 2"` (IPv4 only, matching 4.2). In `/etc/conf.d/hwclock`: `clock_systohc="NO"`.
+In `/etc/conf.d/chronyd` ([reference](etc/conf.d/chronyd)): `ARGS="-4 -u ntp -F 2"` (IPv4 only, matching 4.2). Leave `/etc/conf.d/hwclock` at its default, which does not write the clock at shutdown.
 
 **Why:** without a time daemon the clock drifts, which breaks TLS, 2FA codes and log times. chrony's `rtcsync` (on by default) keeps the hardware clock in sync, so the `hwclock` service no longer needs to write it at shutdown; it still reads it at boot.
 
