@@ -196,7 +196,7 @@ Needs `amdgpu.ppfeaturemask=0xffffffff` (Part 3.1). RDNA 4 takes **offsets** fro
 | -100 mV, -407 MHz | 3023 MHz | 2970 MHz | 207 / 244 W | 49 °C |
 | **-100 mV, -500 MHz (daily)** | **2932 MHz** | **2882 MHz** | **236 / 276 W** | 52 °C |
 
--500 MHz is the driver's lower limit, so about 2930 MHz is the lowest reachable cap: roughly 10 % less clock for about 110 W less power. If a game crashes or `dmesg` shows `ring … timeout` or `GPU reset`, go back to `vo -80` first and keep `s -500`. The old OpenRC script is [`etc-from-gentoo/local.d/amdgpu-undervolt.start`](etc-from-gentoo/local.d/amdgpu-undervolt.start); on Arch run the same writes from a systemd oneshot service ordered after the GPU is up. It also sets the `3D_FULL_SCREEN` power profile (`pp_power_profile_mode` = 1) for faster clock ramp-up in games. **[unverified]**
+-500 MHz is the driver's lower limit, so about 2930 MHz is the lowest reachable cap: roughly 10 % less clock for about 110 W less power. If a game crashes or `dmesg` shows `ring … timeout` or `GPU reset`, go back to `vo -80` first and keep `s -500`. On Arch, the writes run from the systemd oneshot service [`etc/systemd/system/amdgpu-undervolt.service`](etc/systemd/system/amdgpu-undervolt.service) and [`usr/local/bin/amdgpu-undervolt.sh`](usr/local/bin/amdgpu-undervolt.sh). It also sets the `3D_FULL_SCREEN` power profile (`pp_power_profile_mode` = 1) for faster clock ramp-up in games. Verified running on boot.
 
 ### 4.5 CPU (BIOS)
 
@@ -228,16 +228,19 @@ The best cores get the mildest offset: they boost highest and become unstable fi
 
 ## Part 6 – Verification
 
-| Check | Command | Expected |
+| Check | Command | Expected / Verified |
 |---|---|---|
-| Kernel line | `cat /proc/cmdline` | `amd_pstate=active … amdgpu.ppfeaturemask=0xffffffff` |
-| GPU driver | `vulkaninfo --summary \| grep driverName` | `radv` |
-| Undervolt | `cat /sys/class/drm/card*/device/pp_od_clk_voltage` | the voltage and clock offsets |
-| Swap | `swapon --show` | the zram device |
-| Sysctls | `sysctl vm.swappiness kernel.split_lock_mitigate` | `10`, `0` |
-| File limit | `ulimit -n` | `524288` |
-| Clipboard | `echo test \| wl-copy; wl-paste` | `test` |
-| Updates | `sudo pacman -Syu` | `there is nothing to do` |
+| Kernel line | `cat /proc/cmdline` | `amd_pstate=active … amdgpu.ppfeaturemask=0xffffffff` (verified) |
+| GPU driver | `vulkaninfo --summary \| grep driverName` | `driverName = radv` (verified) |
+| Undervolt | `cat /sys/class/drm/card*/device/pp_od_clk_voltage` | `OD_SCLK_OFFSET: -500Mhz`, `OD_VDDGFX_OFFSET: -100mV` (verified) |
+| Power profile | `cat /sys/class/drm/card*/device/pp_power_profile_mode` | `1 3D_FULL_SCREEN*` (verified) |
+| Swap | `swapon --show` | `/dev/zram0 partition 31.3G (lz4, prio 100)` (verified) |
+| Sysctls | `sysctl vm.swappiness kernel.split_lock_mitigate` | `10`, `0` (verified) |
+| File limit | `ulimit -n` | `524288` (verified) |
+| NTSYNC | `ls -l /dev/ntsync` | `/dev/ntsync` (verified) |
+| PipeWire latency | `pw-metadata -n settings 0` | `clock.quantum = 64` (verified) |
+| Clipboard | `echo test \| wl-copy; wl-paste` | `test` (verified) |
+| Updates | `sudo pacman -Syu` | `there is nothing to do` (verified) |
 
 ---
 

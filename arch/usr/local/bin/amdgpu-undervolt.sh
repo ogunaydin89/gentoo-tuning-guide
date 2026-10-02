@@ -1,5 +1,4 @@
 #!/bin/bash
-# UNVERIFIED on Arch: not yet run on the gaming PC. Remove this line once the README's verify step passes.
 # Install to /usr/local/bin/amdgpu-undervolt.sh (mode 755).
 # Sapphire Nitro+ RX 9070 XT (Navi 48 / RDNA 4): undervolt and clock cap.
 # RDNA 4 takes offsets from the card's internal maximum (about 3430 MHz here):
