@@ -298,6 +298,7 @@ The best cores get the mildest offset: they boost highest and become unstable fi
 - **Official repositories only, where possible.** Nothing in this setup needs the AUR, Flatpak or Snap. A third-party source would be used only when there is no other way, after the user agrees and the build recipe has been read.
 - **No hugepages and no MSR tweaks.** The gain was measured at about 3 % on the workstation PC and the risk of a broken desktop is not worth it. This applies to mining as well as to the kernel.
 - **zram with `lz4`.** The CPU-cheapest algorithm; with 32 GB of RAM zram is rarely full, so low CPU cost matters more than compression ratio.
+- **NMI watchdog kept enabled.** Disabling `kernel.nmi_watchdog` frees 1 hardware performance counter and eliminates a periodic microsecond interrupt, but drops diagnostic stack traces during hard lockups. To be decided once undervolt settings are bulletproof.
 - **Terminal:** Konsole comes with the Plasma profile (`Ctrl+Alt+T`).
 
 ---
