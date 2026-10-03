@@ -254,7 +254,7 @@ The best cores get the mildest offset: they boost highest and become unstable fi
 
 | Check | Command | Expected / Verified |
 |---|---|---|
-| Kernel line | `cat /etc/kernel/cmdline` | `amd_pstate=active … mitigations=off pcie_aspm.policy=performance` (verified in UKI) |
+| Kernel line | `cat /proc/cmdline` | `amd_pstate=active … mitigations=off pcie_aspm.policy=performance` (verified) |
 | GPU driver | `vulkaninfo --summary \| grep driverName` | `driverName = radv` (verified) |
 | Undervolt | `cat /sys/class/drm/card*/device/pp_od_clk_voltage` | `OD_SCLK_OFFSET: -500Mhz`, `OD_VDDGFX_OFFSET: -100mV` (verified) |
 | Power profile | `cat /sys/class/drm/card*/device/pp_power_profile_mode` | `1 3D_FULL_SCREEN*` (verified) |
