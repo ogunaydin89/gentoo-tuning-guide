@@ -3,7 +3,7 @@
 
 # <file system> <dir> <type> <options> <dump> <pass>
 # /dev/nvme0n1p2
-UUID=<root-uuid>	/         	ext4      	rw,noatime	0 1
+UUID=<root-uuid>	/         	ext4      	rw,noatime,commit=60	0 1
 
 # /dev/nvme0n1p1
 UUID=<esp-uuid>      	/boot     	vfat      	rw,noatime,fmask=0077,dmask=0077,codepage=437,iocharset=ascii,shortname=mixed,utf8,errors=remount-ro	0 2
