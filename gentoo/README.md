@@ -4,7 +4,7 @@ A step-by-step guide to the Gentoo setup on the workstation PC (Ryzen 7 5700X, R
 
 The gaming PC runs Arch Linux and has its own guide in [`../arch/`](../arch/).
 
-> **Status.** The guide describes the target state of this PC. These items are written up but **not yet applied to the live machine**: the kernel on Gentoo's default config without `savedconfig` (Part 3.1, with THP `madvise`), removing `netmount` and the retired binhost service (`lighttpd`) from the runlevels, and the `buildpkg`/signing lines in `make.conf` (already removed from the reference file, still present live). Everything else matches the live system.
+> **Status.** The guide describes the target state of this PC. One item is written up but **not yet applied to the live machine**: the kernel on Gentoo's default config without `savedconfig` (Part 3.1; THP is already `madvise` for this boot, and the new kernel makes it permanent). Everything else matches the live system.
 
 ## Contents
 
@@ -195,6 +195,8 @@ FEATURES="ccache parallel-fetch parallel-install"
 CCACHE_DIR="/var/cache/ccache"
 ```
 **Why:** rebuilds of the same package (revision bumps, USE changes) reuse earlier compile results. A rebuild of the kernel that took 45 minutes cold took 3 minutes with a warm cache.
+
+The build cache lives in `/var/cache/ccache`, and its size limit is set in `/var/cache/ccache/ccache.conf` (`max_size = 25G` on this machine). To inspect or resize **that** cache, point ccache at it: `sudo env CCACHE_DIR=/var/cache/ccache ccache -s` (or `-p`, `-M 25G`). A plain `ccache -s` shows your user's separate default cache (`~/.cache/ccache`, 5 GiB), and `sudo ccache -M …` changes root's separate default cache; neither affects Portage builds.
 
 ### 2.4 Core tools
 
