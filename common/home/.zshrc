@@ -13,7 +13,7 @@ autoload -Uz compinit && compinit
 zstyle ':completion:*' menu select
 zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}'
 # File-type colours (from /etc/DIR_COLORS) for ls, eza, fd and the completion menu
-eval "$(dircolors -b)"
+eval "$(dircolors -b 2>/dev/null)"
 zstyle ':completion:*' list-colors ${(s.:.)LS_COLORS}
 
 # Keys: emacs mode, plus Home/End/Delete/Ctrl-arrows as Konsole sends them
@@ -69,11 +69,19 @@ _fzf_history_wrapper() {
 zle -N fzf-history-widget _fzf_history_wrapper
 
 
-# Gentoo full system update (see tuning-guide/gentoo, Part 7.1)
-alias up='sudo zsh -c "eix-sync && emerge -vuDN --with-bdeps=y --keep-going @world && emerge --depclean"'
+# Full system update (Gentoo or Arch)
+if command -v pacman >/dev/null 2>&1; then
+    alias up='sudo pacman -Syu'
+elif command -v emerge >/dev/null 2>&1; then
+    alias up='sudo zsh -c "eix-sync && emerge -vuDN --with-bdeps=y --keep-going @world && emerge --depclean"'
+fi
 
 # zoxide: `z <part of dir>` jumps to frequently used directories
 command -v zoxide >/dev/null && eval "$(zoxide init zsh)"
 
-# Syntax highlighting (app-shells/zsh-syntax-highlighting); must stay at the end
-[ -f /usr/share/zsh/site-functions/zsh-syntax-highlighting.zsh ] && source /usr/share/zsh/site-functions/zsh-syntax-highlighting.zsh
+# Syntax highlighting; must stay at the end
+if [ -f /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]; then
+    source /usr/share/zsh/plugins/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+elif [ -f /usr/share/zsh/site-functions/zsh-syntax-highlighting.zsh ]; then
+    source /usr/share/zsh/site-functions/zsh-syntax-highlighting.zsh
+fi

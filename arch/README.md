@@ -178,7 +178,7 @@ sudo install -Dm644 etc/modules-load.d/sensors.conf /etc/modules-load.d/sensors.
 sudo sysctl --system && sudo systemctl daemon-reload && sudo systemd-tmpfiles --create && sudo systemctl enable --now amdgpu-undervolt.service
 ```
 - **`install -Dm644 src dest`** copies the file, creates missing parent folders (`-D`) and sets the mode (`-m644` for configs, `-m755` for the script).
-- **Desktop files** (PipeWire) are user files: copy `home/.config/…` into `~/.config/…`.
+- **Desktop & user files** (PipeWire, gaming environment) are user files: copy `home/.config/…` into `~/.config/…`.
 - **`zram-generator`:** the installer's zram option may already have written `/etc/systemd/zram-generator.conf`; keep one file only.
 - **`ntsync.conf`:** loads `ntsync` for fast Wine/Proton synchronization (natively supported in Linux 7.2+).
 - **`sensors.conf`:** loads `nct6683` for the MSI B550 Nuvoton NCT6687D Super I/O chip to read fan speeds and voltages.
@@ -239,7 +239,8 @@ The best cores get the mildest offset: they boost highest and become unstable fi
 
 - **Steam:** `steam` from `multilib`, with `lib32-vulkan-radeon` for 32-bit games. Steam and most games run through Xwayland, so `xorg-xwayland` must be installed.
 - **No layers:** plain Steam, no gamemode, MangoHud or gamescope. The CPU is already on the `performance` energy preference.
-- **NTSYNC:** recent Wine/Proton can use `/dev/ntsync`. Verified with `sudo modprobe ntsync` and `ls -l /dev/ntsync`; loaded at boot via `/etc/modules-load.d/ntsync.conf`.
+- **NTSYNC & shader cache:** recent Wine/Proton can use `/dev/ntsync` when enabled via `PROTON_USE_NTSYNC=1`. Configured in [`home/.config/environment.d/gaming.conf`](home/.config/environment.d/gaming.conf) along with `MESA_SHADER_CACHE_MAX_SIZE=16G` to prevent shader cache eviction on large games; loaded at boot via `/etc/modules-load.d/ntsync.conf`.
+- **VRR (adaptive sync):** kept off (`"vrrPolicy": "Never"`). KWin's automatic VRR mode drops refresh rate to 48 Hz or stutters heavily in games on high-refresh panels; at 240 Hz fixed (4.16 ms frame time) tearing is imperceptible without VRR switching bugs.
 - **PipeWire latency:** [`home/.config/pipewire/pipewire.conf.d/10-latency.conf`](home/.config/pipewire/pipewire.conf.d/10-latency.conf) sets a 64/32 sample quantum at 48 kHz (about 1.3 ms), verified via `pw-metadata`.
 - **Audio scheduling:** `rtkit` (RealtimeKit) daemon enabled for PipeWire / WirePlumber to guarantee realtime priority without dropouts under gaming load.
 
@@ -259,6 +260,7 @@ The best cores get the mildest offset: they boost highest and become unstable fi
 | CPU EPP | `cat /sys/devices/system/cpu/cpu0/cpufreq/energy_performance_preference` | `performance` (verified) |
 | File limit | `ulimit -n` | `524288` (verified) |
 | NTSYNC | `ls -l /dev/ntsync` | `/dev/ntsync` (verified) |
+| Gaming environment | `systemctl --user show-environment \| grep -E "PROTON\|MESA"` | `PROTON_USE_NTSYNC=1`, `MESA_SHADER_CACHE_MAX_SIZE=16G` (verified) |
 | PipeWire latency | `pw-metadata -n settings 0` | `clock.quantum = 64` (verified) |
 | RTKit daemon | `systemctl is-active rtkit-daemon` | `active` (verified) |
 | Filesystem mount | `findmnt -no OPTIONS /` | `rw,noatime` (verified) |
