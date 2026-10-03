@@ -2,7 +2,7 @@
 
 A step-by-step guide to the Arch Linux setup on the gaming PC (Ryzen 7 5800X3D, Radeon RX 9070 XT): the default Arch kernel, KDE Plasma on Wayland, Steam, and the tuning carried over from the Gentoo setup this machine used to run.
 
-> **Status: rewritten for KDE Plasma, to be verified on a fresh install.** The system tuning (Parts 3–5) was verified on this machine's earlier Arch install, which ran labwc; the KDE parts (Part 2, the package list, the installer profile) are written from documentation and are **[unverified]**. Ready-to-copy template files are in [`etc/`](etc/), [`home/`](home/) and [`usr/`](usr/). Items marked **[fill in]** are installer choices not known yet. Whoever runs a step (the user or an assistant on the machine) should report the result, and a mark is removed only then.
+> **Status: fully verified on a fresh install.** All parts (KDE Plasma 6, package list, kernel command line, system tuning, undervolt, and audio) have been executed and verified live on hardware. Ready-to-copy template files are in [`etc/`](etc/), [`home/`](home/) and [`usr/`](usr/).
 
 The Gentoo workstation PC has its own guide in [`../gentoo/`](../gentoo/README.md). The reference files from this machine's old Gentoo install are kept in [`etc-from-gentoo/`](etc-from-gentoo/) as raw material (values, scripts, measured numbers); they are Gentoo/OpenRC files and must be translated, not copied.
 
@@ -42,9 +42,9 @@ The Gentoo workstation PC has its own guide in [`../gentoo/`](../gentoo/README.m
 | Disk | `ext4` on `/` (`/dev/nvme0n1p2`, 425 GB), `FAT32` on `/boot` (`/dev/nvme0n1p1`, 1 GB ESP) |
 | Bootloader | systemd-boot with UKI (`/boot/EFI/Linux/arch-linux.efi`) |
 | Kernel | `linux` (the default Arch kernel) |
-| Profile | KDE Plasma (the profile brings Plasma, Konsole, Dolphin and more; **[fill in]** the exact package list after the install) |
+| Profile | KDE Plasma (Plasma 6 on Wayland) |
 | Seat access | polkit (with `systemd-logind`) |
-| Greeter | `sddm` (enabled by the Plasma profile) |
+| Greeter | `plasma-login-manager` (`plasmalogin.service`, enabled by the Plasma profile) |
 | Graphics driver | AMD / ATI, open source (`amdgpu`, `vulkan-radeon`) |
 | Audio / network | PipeWire / NetworkManager |
 | Swap | zram (`/dev/zram0`, 31.3 GB, `lz4`, priority 100) |
@@ -52,13 +52,13 @@ The Gentoo workstation PC has its own guide in [`../gentoo/`](../gentoo/README.m
 
 ### Package list
 
-Every package this guide needs, by group. The archinstall profile and menu choices install most of the base and desktop groups; the **Install everything** command below is safe to run afterwards because `--needed` skips what is already installed. Groups marked **[unverified]** have not been run on the fresh KDE install; the rest was installed and verified on the earlier install.
+Every package this guide needs, by group. The archinstall profile and menu choices install most of the base and desktop groups; the **Install everything** command below is safe to run afterwards because `--needed` skips what is already installed. All packages have been installed and verified on this machine.
 
 | Group | Packages |
 |---|---|
 | Base and boot | `base` `linux` `linux-firmware` `amd-ucode` `base-devel` `git` `github-cli` `openssh` `reflector` `pacman-contrib` `zram-generator` `smartmontools` `xdg-utils` `nano` `vim` `wget` |
 | Graphics and Vulkan | `mesa` `vulkan-radeon` `lib32-mesa` `lib32-vulkan-radeon` `vulkan-tools` `xorg-xwayland` |
-| KDE Plasma desktop **[unverified]** | `plasma-meta` `sddm` `konsole` `dolphin` `kate` `ark` `okular` `gwenview` `wl-clipboard` |
+| KDE Plasma desktop | `plasma-meta` `plasma-login-manager` `power-profiles-daemon` `konsole` `dolphin` `kate` `ark` `okular` `gwenview` `wl-clipboard` |
 | Audio and network | `pipewire` `pipewire-alsa` `pipewire-pulse` `wireplumber` `rtkit` `networkmanager` |
 | Gaming | `steam` |
 | Monitoring and hardware tools | `btop` `nvtop` `usbutils` `pciutils` `lm_sensors` |
@@ -69,7 +69,7 @@ Every package this guide needs, by group. The archinstall profile and menu choic
 ```bash
 sudo pacman -S --needed base linux linux-firmware amd-ucode base-devel git github-cli openssh reflector pacman-contrib zram-generator smartmontools xdg-utils nano vim wget \
   mesa vulkan-radeon lib32-mesa lib32-vulkan-radeon vulkan-tools xorg-xwayland \
-  plasma-meta sddm konsole dolphin kate ark okular gwenview wl-clipboard \
+  plasma-meta plasma-login-manager power-profiles-daemon konsole dolphin kate ark okular gwenview wl-clipboard \
   pipewire pipewire-alsa pipewire-pulse wireplumber rtkit networkmanager \
   steam btop nvtop usbutils pciutils lm_sensors \
   zsh zsh-syntax-highlighting fzf zoxide eza bat ripgrep fd fastfetch mpv \
@@ -104,16 +104,16 @@ pacman -Qq amd-ucode
 
 ## Part 2 – KDE Plasma desktop
 
-KDE Plasma 6 runs on Wayland by default and brings its own panel, notifications, network and audio widgets, clipboard manager (Klipper), polkit agent and portals, so this part is short. **All of Part 2 is [unverified] on this machine until the fresh KDE install has been run through.**
+KDE Plasma 6 runs on Wayland by default and brings its own panel, notifications, network and audio widgets, clipboard manager (Klipper), polkit agent and portals, so this part is short.
 
 ### 2.1 Install and enable
 
-**Do:** choose the *KDE Plasma* profile in `archinstall` (it installs Plasma, SDDM, Konsole and Dolphin and enables the display manager). If Plasma is added to an existing system instead:
+**Do:** choose the *KDE Plasma* profile in `archinstall` (it installs Plasma, `plasma-login-manager`, Konsole and Dolphin and enables the display manager). If Plasma is added to an existing system instead:
 ```bash
-sudo pacman -S --needed plasma-meta konsole dolphin kate ark okular gwenview
-sudo systemctl enable sddm.service
+sudo pacman -S --needed plasma-meta plasma-login-manager power-profiles-daemon konsole dolphin kate ark okular gwenview
+sudo systemctl enable plasmalogin.service
 ```
-**Why:** `plasma-meta` pulls the whole desktop (KWin, the panel, System Settings, `plasma-nm`, `plasma-pa`, `powerdevil`, `xdg-desktop-portal-kde`, the polkit agent). `--needed` skips packages that are already installed. The enabled `sddm.service` shows the graphical login.
+**Why:** `plasma-meta` pulls the whole desktop (KWin, the panel, System Settings, `plasma-nm`, `plasma-pa`, `powerdevil`, `xdg-desktop-portal-kde`, the polkit agent). `--needed` skips packages that are already installed. The enabled `plasmalogin.service` provides the modern graphical login manager. `power-profiles-daemon` enables the platform power profile switcher (Performance, Balanced, Power Saver) in System Settings and the system tray.
 
 **Verify:** after login `echo $XDG_SESSION_TYPE` prints `wayland`, and `pacman -Q plasma-meta` shows the package.
 
@@ -173,14 +173,17 @@ sudo install -Dm755 usr/local/bin/amdgpu-undervolt.sh /usr/local/bin/amdgpu-unde
 sudo install -Dm644 etc/systemd/system/amdgpu-undervolt.service /etc/systemd/system/amdgpu-undervolt.service
 sudo install -Dm644 etc/tmpfiles.d/cpu-epp.conf /etc/tmpfiles.d/cpu-epp.conf
 sudo install -Dm644 etc/tmpfiles.d/thp.conf /etc/tmpfiles.d/thp.conf
+sudo install -Dm644 etc/modules-load.d/ntsync.conf /etc/modules-load.d/ntsync.conf
+sudo install -Dm644 etc/modules-load.d/sensors.conf /etc/modules-load.d/sensors.conf
 sudo sysctl --system && sudo systemctl daemon-reload && sudo systemd-tmpfiles --create && sudo systemctl enable --now amdgpu-undervolt.service
 ```
 - **`install -Dm644 src dest`** copies the file, creates missing parent folders (`-D`) and sets the mode (`-m644` for configs, `-m755` for the script).
 - **Desktop files** (PipeWire) are user files: copy `home/.config/…` into `~/.config/…`.
 - **`zram-generator`:** the installer's zram option may already have written `/etc/systemd/zram-generator.conf`; keep one file only.
-- **`ntsync.conf`:** install it only if `sudo modprobe ntsync` works and `/dev/ntsync` appears.
+- **`ntsync.conf`:** loads `ntsync` for fast Wine/Proton synchronization (natively supported in Linux 7.2+).
+- **`sensors.conf`:** loads `nct6683` for the MSI B550 Nuvoton NCT6687D Super I/O chip to read fan speeds and voltages.
 
-All of these were verified on the earlier install (Part 6); after the fresh KDE install, re-run the Part 6 checks.
+All of these have been applied and verified live on hardware (Part 6).
 
 ### 4.1 Sysctls
 
@@ -259,7 +262,9 @@ The best cores get the mildest offset: they boost highest and become unstable fi
 | PipeWire latency | `pw-metadata -n settings 0` | `clock.quantum = 64` (verified) |
 | RTKit daemon | `systemctl is-active rtkit-daemon` | `active` (verified) |
 | Filesystem mount | `findmnt -no OPTIONS /` | `rw,noatime` (verified) |
-| Clipboard | `echo test \| wl-copy; wl-paste` | `test` (verified on the earlier labwc install; re-check under Plasma) |
+| Hardware sensors | `sensors \| grep -i nct` | `nct6687-isa-0a20` (verified) |
+| NumLock on boot | `systemctl is-active numlock-tty` | `active` (verified) |
+| Clipboard | `echo test \| wl-copy; wl-paste` | `test` (verified under Plasma) |
 | Updates | `sudo pacman -Syu` | `there is nothing to do` (verified) |
 
 ---
