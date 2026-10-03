@@ -1,3 +1,0 @@
-# Install to ~/.config/labwc/environment (read by labwc at start).
-XKB_DEFAULT_LAYOUT=tr
-XDG_CURRENT_DESKTOP=labwc:wlroots

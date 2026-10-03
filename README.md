@@ -5,7 +5,7 @@ Step-by-step tuning guides for my PCs. Every step has a **Do**, a **Why** and a 
 | Machine | Hardware | OS | Guide |
 |---|---|---|---|
 | Workstation PC | Ryzen 7 5700X, Radeon RX 6650 XT, 16 GB, A520 | Gentoo (OpenRC, KDE Plasma on Wayland) | [`gentoo/`](gentoo/README.md) |
-| Gaming PC | Ryzen 7 5800X3D, Radeon RX 9070 XT, 32 GB, B550 | Arch Linux (labwc on Wayland) | [`arch/`](arch/README.md) |
+| Gaming PC | Ryzen 7 5800X3D, Radeon RX 9070 XT, 32 GB, B550 | Arch Linux (KDE Plasma on Wayland) | [`arch/`](arch/README.md) |
 
 The school PC (Windows 11) is not covered.
 
